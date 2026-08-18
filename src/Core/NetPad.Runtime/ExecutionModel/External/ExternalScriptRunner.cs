@@ -1,6 +1,7 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.Logging;
+using NetPad.Application;
 using NetPad.Compilation;
 using NetPad.Configuration;
 using NetPad.Data.Metadata;
@@ -20,6 +21,7 @@ namespace NetPad.ExecutionModel.External;
 public sealed partial class ExternalScriptRunner : IScriptRunner
 {
     private readonly Script _script;
+    private readonly IAppStatusMessagePublisher _appStatusMessagePublisher;
     private readonly IDataConnectionResourcesCache _dataConnectionResourcesCache;
     private readonly IDotNetInfo _dotNetInfo;
     private readonly ILogger<ExternalScriptRunner> _logger;
@@ -42,12 +44,14 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
         ICodeParser codeParser,
         ICodeCompiler codeCompiler,
         IPackageProvider packageProvider,
+        IAppStatusMessagePublisher appStatusMessagePublisher,
         IDataConnectionResourcesCache dataConnectionResourcesCache,
         IDotNetInfo dotNetInfo,
         Settings settings,
         ILogger<ExternalScriptRunner> logger)
     {
         _script = script;
+        _appStatusMessagePublisher = appStatusMessagePublisher;
         _dataConnectionResourcesCache = dataConnectionResourcesCache;
         _codeParser = codeParser;
         _codeCompiler = codeCompiler;
@@ -68,7 +72,7 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
                 return;
             }
 
-            foreach (var writer in _externalOutputWriters)
+            foreach (var writer in _externalOutputWriters.ToArray())
             {
                 try
                 {
@@ -113,8 +117,10 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
                 ? options.ProcessCliArgs
                 : options.ProcessCliArgs.Concat(["-parent", Environment.ProcessId.ToString()]).ToArray();
 
+            var dotNetExe = _dotNetInfo.LocateDotNetExecutableForFramework(_script.Config.TargetFrameworkVersion)
+                           ?? _dotNetInfo.LocateDotNetExecutableOrThrow();
             var startInfo = new ProcessStartInfo(
-                    _dotNetInfo.LocateDotNetExecutableOrThrow(),
+                    dotNetExe,
                     $"\"{scriptAssemblyFilePath}\" -- {string.Join(' ', args)}")
                 .CopyCurrentEnvironmentVariables();
 
@@ -145,7 +151,13 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
                 return RunResult.RunAttemptFailure();
             }
 
+            _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Running...");
+
             var exitCode = await _scriptProcess.WaitForExitTask;
+
+            // Flush any remaining buffered output. The debounced RawOutputHandler may
+            // still have queued items that haven't been pushed to output writers yet.
+            _rawOutputHandler.Flush();
 
             stopWatch.Stop();
             var elapsed = stopWatch.ElapsedMilliseconds;
@@ -170,7 +182,7 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error running script");
-            await _output.WriteAsync(new ErrorScriptOutput(ex));
+            await _output.WriteAsync(new ScriptOutput(ScriptOutputKind.Error, ex.ToString()));
             return RunResult.RunAttemptFailure();
         }
         finally
@@ -199,6 +211,7 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
             _logger.LogError(ex, "Error killing script process");
         }
 
+        _scriptProcess.Process.Dispose();
         _scriptProcess = null;
         return Task.CompletedTask;
     }

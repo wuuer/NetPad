@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using NetPad.Application;
 using NetPad.DotNet;
@@ -40,7 +40,7 @@ public class CheckAppDependenciesQuery : Query<AppDependencyCheckResult>
 
             var result = new AppDependencyCheckResult(
                 dotNetInfo.GetCurrentDotNetRuntimeVersion().ToString(),
-                dotNetSdkVersions?.Select(v => v.Version).ToArray() ?? [],
+                dotNetSdkVersions ?? [],
                 dotNetEfToolVersion
             );
 

@@ -1,6 +1,7 @@
 mod commands;
 mod dotnet_server_manager;
 mod errors;
+mod startup;
 mod windows;
 
 use std::sync::Mutex;
@@ -30,17 +31,15 @@ pub fn run() -> Result<()> {
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_filter(|label| label == "main")
+                .build(),
+        )
         .manage(server_manager_state)
         .setup(move |app| {
-            // Start .NET app and open main window
             if cfg!(not(debug_assertions)) {
-                let state: State<DotNetServerManagerState> = app.state();
-                state
-                    .server_manager_mutex
-                    .lock()
-                    .unwrap()
-                    .start_backend(app.handle())
-                    .expect("Failed to start .NET server");
+                startup::start_backend_and_navigate(app);
             }
 
             create_main_window(app.handle())?;

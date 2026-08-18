@@ -1,6 +1,6 @@
 {
     "productName": "NetPad vNext",
-    "version": "0.11.0",
+    "version": "0.12.0",
     "mainBinaryName": "NetPad vNext",
     "identifier": "dev.netpad.vnext",
     "build": {
@@ -8,7 +8,7 @@
             "script": "npm run start-web",
             "cwd": "../../../NetPad.Apps.App/App"
         },
-        "devUrl": "http://localhost:57950?shell=tauri",
+        "devUrl": "http://localhost:57950?shell=tauri&token=dev",
         "frontendDist": "./loader"
     },
     "app": {

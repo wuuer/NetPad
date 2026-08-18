@@ -1,11 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using NetPad.Data.Metadata;
 using NetPad.Scripts;
-using NetPad.Tests;
-using NetPad.Tests.Helpers;
-using NetPad.Tests.Services;
-using Xunit;
-using Xunit.Abstractions;
 
 namespace NetPad.Runtime.Tests.Sessions;
 
@@ -86,7 +81,7 @@ public class SessionTests(ITestOutputHelper testOutputHelper) : TestBase(testOut
     }
 
     [Fact]
-    public async Task ActivingAScript_SetsItAsTheActiveScript()
+    public async Task ActivatingAScript_SetsItAsTheActiveScript()
     {
         var session = SessionTestHelper.CreateSession(ServiceProvider);
         var script1 = ScriptTestHelper.CreateScript();

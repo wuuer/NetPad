@@ -40,7 +40,7 @@ export class AppService extends AppApiClient implements IAppService {
 
     public async getCurrentAndLatestVersions(): Promise<{ current: Version, latest: Version } | null> {
         const appId = await this.getIdentifier();
-        const current = new Version(appId.version);
+        const current = new Version(appId.productVersion);
 
         if (current.isEmpty) {
             return null;
@@ -67,13 +67,13 @@ export class AppService extends AppApiClient implements IAppService {
         const frameworks = new Set<DotNetFrameworkVersion>();
 
         for (const sdkVersion of result.supportedDotNetSdkVersionsInstalled) {
-            const major = sdkVersion.major;
+            const major = sdkVersion.version.major;
 
             if (!isNaN(major) && major >= 2) {
                 frameworks.add(`DotNet${major}` as DotNetFrameworkVersion);
             }
         }
 
-        return [...frameworks].sort((a, b) => a.localeCompare(b));
+        return [...frameworks].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     }
 }

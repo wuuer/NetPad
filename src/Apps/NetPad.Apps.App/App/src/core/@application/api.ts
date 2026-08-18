@@ -519,9 +519,9 @@ export class CodeApiClient extends ApiClientBase implements ICodeApiClient {
 
 export interface IDataConnectionsApiClient {
 
-    openDataConnectionWindow(dataConnectionId: string | null | undefined, copy: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
+    openDataConnectionWindow(dataConnectionId: string | null | undefined, copy: boolean | undefined, isServer: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
-    getAll(signal?: AbortSignal | undefined): Promise<DataConnection[]>;
+    getAll(signal?: AbortSignal | undefined): Promise<GetAllConnectionsResponse>;
 
     save(dataConnection: DataConnection, signal?: AbortSignal | undefined): Promise<void>;
 
@@ -537,9 +537,21 @@ export interface IDataConnectionsApiClient {
 
     test(dataConnection: DataConnection, signal?: AbortSignal | undefined): Promise<DataConnectionTestResult>;
 
+    testById(id: string, signal?: AbortSignal | undefined): Promise<DataConnectionTestResult>;
+
     protectPassword(unprotectedPassword: string, signal?: AbortSignal | undefined): Promise<string | null>;
 
     getDatabases(dataConnection: DataConnection, signal?: AbortSignal | undefined): Promise<string[]>;
+
+    getDatabasesById(id: string, signal?: AbortSignal | undefined): Promise<string[]>;
+
+    getServer(id: string, signal?: AbortSignal | undefined): Promise<DatabaseServerConnection>;
+
+    deleteServer(id: string, signal?: AbortSignal | undefined): Promise<void>;
+
+    saveServer(server: DatabaseServerConnection, signal?: AbortSignal | undefined): Promise<void>;
+
+    refreshServer(id: string, signal?: AbortSignal | undefined): Promise<void>;
 
     getDatabaseStructure(id: string, signal?: AbortSignal | undefined): Promise<DatabaseStructure>;
 
@@ -557,7 +569,7 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
         this.baseUrl = baseUrl ?? "";
     }
 
-    openDataConnectionWindow(dataConnectionId: string | null | undefined, copy: boolean | undefined, signal?: AbortSignal): Promise<void> {
+    openDataConnectionWindow(dataConnectionId: string | null | undefined, copy: boolean | undefined, isServer: boolean | undefined, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/data-connections/open?";
         if (dataConnectionId !== undefined && dataConnectionId !== null)
             url_ += "dataConnectionId=" + encodeURIComponent("" + dataConnectionId) + "&";
@@ -565,6 +577,10 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
             throw new Error("The parameter 'copy' cannot be null.");
         else if (copy !== undefined)
             url_ += "copy=" + encodeURIComponent("" + copy) + "&";
+        if (isServer === null)
+            throw new Error("The parameter 'isServer' cannot be null.");
+        else if (isServer !== undefined)
+            url_ += "isServer=" + encodeURIComponent("" + isServer) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -594,7 +610,7 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
         return Promise.resolve<void>(null as any);
     }
 
-    getAll(signal?: AbortSignal): Promise<DataConnection[]> {
+    getAll(signal?: AbortSignal): Promise<GetAllConnectionsResponse> {
         let url_ = this.baseUrl + "/data-connections";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -611,21 +627,14 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
         });
     }
 
-    protected processGetAll(response: Response): Promise<DataConnection[]> {
+    protected processGetAll(response: Response): Promise<GetAllConnectionsResponse> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
             return response.text().then((_responseText) => {
             let result200: any = null;
             let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            if (Array.isArray(resultData200)) {
-                result200 = [] as any;
-                for (let item of resultData200)
-                    result200!.push(DataConnection.fromJS(item));
-            }
-            else {
-                result200 = <any>null;
-            }
+            result200 = GetAllConnectionsResponse.fromJS(resultData200);
             return result200;
             });
         } else if (status !== 200 && status !== 204) {
@@ -633,7 +642,7 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<DataConnection[]>(null as any);
+        return Promise.resolve<GetAllConnectionsResponse>(null as any);
     }
 
     save(dataConnection: DataConnection, signal?: AbortSignal): Promise<void> {
@@ -898,6 +907,44 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
         return Promise.resolve<DataConnectionTestResult>(null as any);
     }
 
+    testById(id: string, signal?: AbortSignal): Promise<DataConnectionTestResult> {
+        let url_ = this.baseUrl + "/data-connections/{id}/test";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processTestById(_response);
+        });
+    }
+
+    protected processTestById(response: Response): Promise<DataConnectionTestResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = DataConnectionTestResult.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DataConnectionTestResult>(null as any);
+    }
+
     protectPassword(unprotectedPassword: string, signal?: AbortSignal): Promise<string | null> {
         let url_ = this.baseUrl + "/data-connections/protect-password";
         url_ = url_.replace(/[?&]$/, "");
@@ -982,6 +1029,192 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
             });
         }
         return Promise.resolve<string[]>(null as any);
+    }
+
+    getDatabasesById(id: string, signal?: AbortSignal): Promise<string[]> {
+        let url_ = this.baseUrl + "/data-connections/{id}/databases";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetDatabasesById(_response);
+        });
+    }
+
+    protected processGetDatabasesById(response: Response): Promise<string[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(item);
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string[]>(null as any);
+    }
+
+    getServer(id: string, signal?: AbortSignal): Promise<DatabaseServerConnection> {
+        let url_ = this.baseUrl + "/data-connections/servers/{id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetServer(_response);
+        });
+    }
+
+    protected processGetServer(response: Response): Promise<DatabaseServerConnection> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = DatabaseServerConnection.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DatabaseServerConnection>(null as any);
+    }
+
+    deleteServer(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/data-connections/servers/{id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processDeleteServer(_response);
+        });
+    }
+
+    protected processDeleteServer(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    saveServer(server: DatabaseServerConnection, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/data-connections/servers";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(server);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processSaveServer(_response);
+        });
+    }
+
+    protected processSaveServer(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    refreshServer(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/data-connections/servers/{id}/refresh";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processRefreshServer(_response);
+        });
+    }
+
+    protected processRefreshServer(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     getDatabaseStructure(id: string, signal?: AbortSignal): Promise<DatabaseStructure> {
@@ -1070,6 +1303,146 @@ export class DataConnectionsApiClient extends ApiClientBase implements IDataConn
             });
         }
         return Promise.resolve<FileResponse | null>(null as any);
+    }
+}
+
+export interface IHeadlessApiClient {
+
+    runCode(request: HeadlessRunRequest, signal?: AbortSignal | undefined): Promise<HeadlessRunResult>;
+
+    runScript(scriptId: string, timeoutMs: number | null | undefined, signal?: AbortSignal | undefined): Promise<HeadlessRunResult>;
+
+    runScriptInGui(scriptId: string, timeoutMs: number | null | undefined, signal?: AbortSignal | undefined): Promise<HeadlessRunResult>;
+}
+
+export class HeadlessApiClient extends ApiClientBase implements IHeadlessApiClient {
+    private http: IHttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, @IHttpClient http?: IHttpClient) {
+        super();
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    runCode(request: HeadlessRunRequest, signal?: AbortSignal): Promise<HeadlessRunResult> {
+        let url_ = this.baseUrl + "/headless/run";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processRunCode(_response);
+        });
+    }
+
+    protected processRunCode(response: Response): Promise<HeadlessRunResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = HeadlessRunResult.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<HeadlessRunResult>(null as any);
+    }
+
+    runScript(scriptId: string, timeoutMs: number | null | undefined, signal?: AbortSignal): Promise<HeadlessRunResult> {
+        let url_ = this.baseUrl + "/headless/run/{scriptId}?";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        if (timeoutMs !== undefined && timeoutMs !== null)
+            url_ += "timeoutMs=" + encodeURIComponent("" + timeoutMs) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processRunScript(_response);
+        });
+    }
+
+    protected processRunScript(response: Response): Promise<HeadlessRunResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = HeadlessRunResult.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<HeadlessRunResult>(null as any);
+    }
+
+    runScriptInGui(scriptId: string, timeoutMs: number | null | undefined, signal?: AbortSignal): Promise<HeadlessRunResult> {
+        let url_ = this.baseUrl + "/headless/run/{scriptId}/gui?";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        if (timeoutMs !== undefined && timeoutMs !== null)
+            url_ += "timeoutMs=" + encodeURIComponent("" + timeoutMs) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processRunScriptInGui(_response);
+        });
+    }
+
+    protected processRunScriptInGui(response: Response): Promise<HeadlessRunResult> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = HeadlessRunResult.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<HeadlessRunResult>(null as any);
     }
 }
 
@@ -1481,21 +1854,33 @@ export interface IScriptsApiClient {
 
     getScripts(signal?: AbortSignal | undefined): Promise<ScriptSummary[]>;
 
-    create(dto: CreateScriptDto, signal?: AbortSignal | undefined): Promise<void>;
+    getScriptsInfo(name: string | null | undefined, signal?: AbortSignal | undefined): Promise<ScriptInfo[]>;
+
+    getScript(id: string, signal?: AbortSignal | undefined): Promise<Script>;
+
+    delete(id: string, signal?: AbortSignal | undefined): Promise<void>;
+
+    getCode(id: string, signal?: AbortSignal | undefined): Promise<string>;
+
+    updateCode(id: string, code: string, externallyInitiated: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
+
+    create(dto: CreateScriptDto, signal?: AbortSignal | undefined): Promise<Script>;
 
     rename(id: string, newName: string, signal?: AbortSignal | undefined): Promise<void>;
 
-    duplicate(id: string, signal?: AbortSignal | undefined): Promise<void>;
+    duplicate(id: string, signal?: AbortSignal | undefined): Promise<Script>;
 
     save(id: string, signal?: AbortSignal | undefined): Promise<boolean>;
+
+    saveAs(id: string, signal?: AbortSignal | undefined): Promise<boolean>;
+
+    deleteFolder(path: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
     run(id: string, options: RunOptions, signal?: AbortSignal | undefined): Promise<void>;
 
     stop(id: string, stopRunner: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
     stopAll(force: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
-
-    updateCode(id: string, code: string, signal?: AbortSignal | undefined): Promise<void>;
 
     openConfigWindow(id: string, tab: string | null | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
@@ -1573,27 +1958,108 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
         return Promise.resolve<ScriptSummary[]>(null as any);
     }
 
-    create(dto: CreateScriptDto, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/scripts/create";
+    getScriptsInfo(name: string | null | undefined, signal?: AbortSignal): Promise<ScriptInfo[]> {
+        let url_ = this.baseUrl + "/scripts/info?";
+        if (name !== undefined && name !== null)
+            url_ += "name=" + encodeURIComponent("" + name) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
-        const content_ = JSON.stringify(dto);
-
         let options_: RequestInit = {
-            body: content_,
-            method: "PATCH",
+            method: "GET",
             signal,
             headers: {
-                "Content-Type": "application/json",
+                "Accept": "application/json"
             }
         };
 
         return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
-            return this.processCreate(_response);
+            return this.processGetScriptsInfo(_response);
         });
     }
 
-    protected processCreate(response: Response): Promise<void> {
+    protected processGetScriptsInfo(response: Response): Promise<ScriptInfo[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ScriptInfo.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScriptInfo[]>(null as any);
+    }
+
+    getScript(id: string, signal?: AbortSignal): Promise<Script> {
+        let url_ = this.baseUrl + "/scripts/{id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetScript(_response);
+        });
+    }
+
+    protected processGetScript(response: Response): Promise<Script> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = Script.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<Script>(null as any);
+    }
+
+    delete(id: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processDelete(_response);
+        });
+    }
+
+    protected processDelete(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
@@ -1606,6 +2072,126 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             });
         }
         return Promise.resolve<void>(null as any);
+    }
+
+    getCode(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/scripts/{id}/code";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetCode(_response);
+        });
+    }
+
+    protected processGetCode(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result200 = resultData200 !== undefined ? resultData200 : <any>null;
+    
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    updateCode(id: string, code: string, externallyInitiated: boolean | undefined, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/code?";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (externallyInitiated === null)
+            throw new Error("The parameter 'externallyInitiated' cannot be null.");
+        else if (externallyInitiated !== undefined)
+            url_ += "externallyInitiated=" + encodeURIComponent("" + externallyInitiated) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(code);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processUpdateCode(_response);
+        });
+    }
+
+    protected processUpdateCode(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    create(dto: CreateScriptDto, signal?: AbortSignal): Promise<Script> {
+        let url_ = this.baseUrl + "/scripts/create";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(dto);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processCreate(_response);
+        });
+    }
+
+    protected processCreate(response: Response): Promise<Script> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = Script.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<Script>(null as any);
     }
 
     rename(id: string, newName: string, signal?: AbortSignal): Promise<void> {
@@ -1646,7 +2232,7 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
         return Promise.resolve<void>(null as any);
     }
 
-    duplicate(id: string, signal?: AbortSignal): Promise<void> {
+    duplicate(id: string, signal?: AbortSignal): Promise<Script> {
         let url_ = this.baseUrl + "/scripts/{id}/duplicate";
         if (id === undefined || id === null)
             throw new Error("The parameter 'id' must be defined.");
@@ -1657,6 +2243,7 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             method: "PATCH",
             signal,
             headers: {
+                "Accept": "application/json"
             }
         };
 
@@ -1665,19 +2252,22 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
         });
     }
 
-    protected processDuplicate(response: Response): Promise<void> {
+    protected processDuplicate(response: Response): Promise<Script> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
             return response.text().then((_responseText) => {
-            return;
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = Script.fromJS(resultData200);
+            return result200;
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<void>(null as any);
+        return Promise.resolve<Script>(null as any);
     }
 
     save(id: string, signal?: AbortSignal): Promise<boolean> {
@@ -1717,6 +2307,80 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             });
         }
         return Promise.resolve<boolean>(null as any);
+    }
+
+    saveAs(id: string, signal?: AbortSignal): Promise<boolean> {
+        let url_ = this.baseUrl + "/scripts/{id}/save-as";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processSaveAs(_response);
+        });
+    }
+
+    protected processSaveAs(response: Response): Promise<boolean> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result200 = resultData200 !== undefined ? resultData200 : <any>null;
+    
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<boolean>(null as any);
+    }
+
+    deleteFolder(path: string | undefined, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/folder?";
+        if (path === null)
+            throw new Error("The parameter 'path' cannot be null.");
+        else if (path !== undefined)
+            url_ += "path=" + encodeURIComponent("" + path) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processDeleteFolder(_response);
+        });
+    }
+
+    protected processDeleteFolder(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     run(id: string, options: RunOptions, signal?: AbortSignal): Promise<void> {
@@ -1816,44 +2480,6 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
     }
 
     protected processStopAll(response: Response): Promise<void> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            return;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<void>(null as any);
-    }
-
-    updateCode(id: string, code: string, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/scripts/{id}/code";
-        if (id === undefined || id === null)
-            throw new Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(code);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "PUT",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-            }
-        };
-
-        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
-            return this.processUpdateCode(_response);
-        });
-    }
-
-    protected processUpdateCode(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
@@ -2341,11 +2967,21 @@ export interface ISessionApiClient {
 
     getEnvironments(signal?: AbortSignal | undefined): Promise<ScriptEnvironment[]>;
 
-    openByPath(scriptPath: string, signal?: AbortSignal | undefined): Promise<void>;
+    openById(scriptId: string, signal?: AbortSignal | undefined): Promise<ScriptEnvironment>;
+
+    openByPath(scriptPath: string, signal?: AbortSignal | undefined): Promise<ScriptEnvironment>;
 
     close(scriptId: string, discardUnsavedChanges: boolean | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
     getActive(signal?: AbortSignal | undefined): Promise<string | null>;
+
+    getEnvironmentStatus(scriptId: string, signal?: AbortSignal | undefined): Promise<ScriptStatusDto>;
+
+    getRecent(signal?: AbortSignal | undefined): Promise<string[]>;
+
+    clearRecent(signal?: AbortSignal | undefined): Promise<void>;
+
+    removeRecent(scriptPath: string, signal?: AbortSignal | undefined): Promise<void>;
 }
 
 export class SessionApiClient extends ApiClientBase implements ISessionApiClient {
@@ -2439,7 +3075,45 @@ export class SessionApiClient extends ApiClientBase implements ISessionApiClient
         return Promise.resolve<ScriptEnvironment[]>(null as any);
     }
 
-    openByPath(scriptPath: string, signal?: AbortSignal): Promise<void> {
+    openById(scriptId: string, signal?: AbortSignal): Promise<ScriptEnvironment> {
+        let url_ = this.baseUrl + "/session/open/{scriptId}";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processOpenById(_response);
+        });
+    }
+
+    protected processOpenById(response: Response): Promise<ScriptEnvironment> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = ScriptEnvironment.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScriptEnvironment>(null as any);
+    }
+
+    openByPath(scriptPath: string, signal?: AbortSignal): Promise<ScriptEnvironment> {
         let url_ = this.baseUrl + "/session/open/path";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -2451,6 +3125,7 @@ export class SessionApiClient extends ApiClientBase implements ISessionApiClient
             signal,
             headers: {
                 "Content-Type": "application/json",
+                "Accept": "application/json"
             }
         };
 
@@ -2459,19 +3134,22 @@ export class SessionApiClient extends ApiClientBase implements ISessionApiClient
         });
     }
 
-    protected processOpenByPath(response: Response): Promise<void> {
+    protected processOpenByPath(response: Response): Promise<ScriptEnvironment> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
             return response.text().then((_responseText) => {
-            return;
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = ScriptEnvironment.fromJS(resultData200);
+            return result200;
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<void>(null as any);
+        return Promise.resolve<ScriptEnvironment>(null as any);
     }
 
     close(scriptId: string, discardUnsavedChanges: boolean | undefined, signal?: AbortSignal): Promise<void> {
@@ -2546,6 +3224,152 @@ export class SessionApiClient extends ApiClientBase implements ISessionApiClient
             });
         }
         return Promise.resolve<string | null>(null as any);
+    }
+
+    getEnvironmentStatus(scriptId: string, signal?: AbortSignal): Promise<ScriptStatusDto> {
+        let url_ = this.baseUrl + "/session/environments/{scriptId}/status";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetEnvironmentStatus(_response);
+        });
+    }
+
+    protected processGetEnvironmentStatus(response: Response): Promise<ScriptStatusDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = ScriptStatusDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ScriptStatusDto>(null as any);
+    }
+
+    getRecent(signal?: AbortSignal): Promise<string[]> {
+        let url_ = this.baseUrl + "/session/recent";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetRecent(_response);
+        });
+    }
+
+    protected processGetRecent(response: Response): Promise<string[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(item);
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string[]>(null as any);
+    }
+
+    clearRecent(signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/session/recent";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processClearRecent(_response);
+        });
+    }
+
+    protected processClearRecent(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    removeRecent(scriptPath: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/session/recent/entry";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(scriptPath);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "DELETE",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processRemoveRecent(_response);
+        });
+    }
+
+    protected processRemoveRecent(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 }
 
@@ -3104,11 +3928,11 @@ export class AppDependencyCheckResult implements IAppDependencyCheckResult {
     /** The version of the .NET runtime the application is currently running on. */
     dotNetRuntimeVersion!: string;
     /** A collection of all .NET SDK versions detected as installed. */
-    dotNetSdkVersions!: SemanticVersion[];
+    dotNetSdkVersions!: DotNetSdkVersion[];
     /** The version of the Entity Framework Core command‑line tool (ef), if installed; otherwise, null. */
     dotNetEfToolVersion?: SemanticVersion | undefined;
     /** Gets the subset of DotNetSdkVersions that are supported for use in user scripts. */
-    supportedDotNetSdkVersionsInstalled!: SemanticVersion[];
+    supportedDotNetSdkVersionsInstalled!: DotNetSdkVersion[];
     /** Gets a value indicating whether the installed Entity Framework Core command‑line tool (ef) is supported. */
     isSupportedDotNetEfToolInstalled!: boolean;
 
@@ -3131,13 +3955,13 @@ export class AppDependencyCheckResult implements IAppDependencyCheckResult {
             if (Array.isArray(_data["dotNetSdkVersions"])) {
                 this.dotNetSdkVersions = [] as any;
                 for (let item of _data["dotNetSdkVersions"])
-                    this.dotNetSdkVersions!.push(SemanticVersion.fromJS(item));
+                    this.dotNetSdkVersions!.push(DotNetSdkVersion.fromJS(item));
             }
             this.dotNetEfToolVersion = _data["dotNetEfToolVersion"] ? SemanticVersion.fromJS(_data["dotNetEfToolVersion"]) : <any>undefined;
             if (Array.isArray(_data["supportedDotNetSdkVersionsInstalled"])) {
                 this.supportedDotNetSdkVersionsInstalled = [] as any;
                 for (let item of _data["supportedDotNetSdkVersionsInstalled"])
-                    this.supportedDotNetSdkVersionsInstalled!.push(SemanticVersion.fromJS(item));
+                    this.supportedDotNetSdkVersionsInstalled!.push(DotNetSdkVersion.fromJS(item));
             }
             this.isSupportedDotNetEfToolInstalled = _data["isSupportedDotNetEfToolInstalled"];
         }
@@ -3181,13 +4005,65 @@ export interface IAppDependencyCheckResult {
     /** The version of the .NET runtime the application is currently running on. */
     dotNetRuntimeVersion: string;
     /** A collection of all .NET SDK versions detected as installed. */
-    dotNetSdkVersions: SemanticVersion[];
+    dotNetSdkVersions: DotNetSdkVersion[];
     /** The version of the Entity Framework Core command‑line tool (ef), if installed; otherwise, null. */
     dotNetEfToolVersion?: SemanticVersion | undefined;
     /** Gets the subset of DotNetSdkVersions that are supported for use in user scripts. */
-    supportedDotNetSdkVersionsInstalled: SemanticVersion[];
+    supportedDotNetSdkVersionsInstalled: DotNetSdkVersion[];
     /** Gets a value indicating whether the installed Entity Framework Core command‑line tool (ef) is supported. */
     isSupportedDotNetEfToolInstalled: boolean;
+}
+
+/** A version of .NET SDK. */
+export class DotNetSdkVersion implements IDotNetSdkVersion {
+    version!: SemanticVersion;
+    dotNetRootDirectory?: string | undefined;
+
+    constructor(data?: IDotNetSdkVersion) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.version = new SemanticVersion();
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.version = _data["version"] ? SemanticVersion.fromJS(_data["version"]) : new SemanticVersion();
+            this.dotNetRootDirectory = _data["dotNetRootDirectory"];
+        }
+    }
+
+    static fromJS(data: any): DotNetSdkVersion {
+        data = typeof data === 'object' ? data : {};
+        let result = new DotNetSdkVersion();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["version"] = this.version ? this.version.toJSON() : <any>undefined;
+        data["dotNetRootDirectory"] = this.dotNetRootDirectory;
+        return data;
+    }
+
+    clone(): DotNetSdkVersion {
+        const json = this.toJSON();
+        let result = new DotNetSdkVersion();
+        result.init(json);
+        return result;
+    }
+}
+
+/** A version of .NET SDK. */
+export interface IDotNetSdkVersion {
+    version: SemanticVersion;
+    dotNetRootDirectory?: string | undefined;
 }
 
 /** An implementation of semantic versioning (https://semver.org) */
@@ -3276,6 +4152,8 @@ export interface ISemanticVersion {
 export class DotNetPathReport implements IDotNetPathReport {
     resolvedPath?: DirectoryPath | undefined;
     searchSteps!: SearchStep[];
+    /** All valid .NET installation directories found, in priority order. */
+    allValidPaths!: DirectoryPath[];
 
     constructor(data?: IDotNetPathReport) {
         if (data) {
@@ -3286,6 +4164,7 @@ export class DotNetPathReport implements IDotNetPathReport {
         }
         if (!data) {
             this.searchSteps = [];
+            this.allValidPaths = [];
         }
     }
 
@@ -3296,6 +4175,11 @@ export class DotNetPathReport implements IDotNetPathReport {
                 this.searchSteps = [] as any;
                 for (let item of _data["searchSteps"])
                     this.searchSteps!.push(SearchStep.fromJS(item));
+            }
+            if (Array.isArray(_data["allValidPaths"])) {
+                this.allValidPaths = [] as any;
+                for (let item of _data["allValidPaths"])
+                    this.allValidPaths!.push(DirectoryPath.fromJS(item));
             }
         }
     }
@@ -3315,6 +4199,11 @@ export class DotNetPathReport implements IDotNetPathReport {
             for (let item of this.searchSteps)
                 data["searchSteps"].push(item ? item.toJSON() : <any>undefined);
         }
+        if (Array.isArray(this.allValidPaths)) {
+            data["allValidPaths"] = [];
+            for (let item of this.allValidPaths)
+                data["allValidPaths"].push(item ? item.toJSON() : <any>undefined);
+        }
         return data;
     }
 
@@ -3329,6 +4218,8 @@ export class DotNetPathReport implements IDotNetPathReport {
 export interface IDotNetPathReport {
     resolvedPath?: DirectoryPath | undefined;
     searchSteps: SearchStep[];
+    /** All valid .NET installation directories found, in priority order. */
+    allValidPaths: DirectoryPath[];
 }
 
 /** An absolute path to a file or a directory. */
@@ -3880,7 +4771,7 @@ export interface ISyntaxNodeOrTokenSlim {
     children: SyntaxNodeOrTokenSlim[];
 }
 
-export type SyntaxKind = "None" | "List" | "TildeToken" | "ExclamationToken" | "DollarToken" | "PercentToken" | "CaretToken" | "AmpersandToken" | "AsteriskToken" | "OpenParenToken" | "CloseParenToken" | "MinusToken" | "PlusToken" | "EqualsToken" | "OpenBraceToken" | "CloseBraceToken" | "OpenBracketToken" | "CloseBracketToken" | "BarToken" | "BackslashToken" | "ColonToken" | "SemicolonToken" | "DoubleQuoteToken" | "SingleQuoteToken" | "LessThanToken" | "CommaToken" | "GreaterThanToken" | "DotToken" | "QuestionToken" | "HashToken" | "SlashToken" | "DotDotToken" | "SlashGreaterThanToken" | "LessThanSlashToken" | "XmlCommentStartToken" | "XmlCommentEndToken" | "XmlCDataStartToken" | "XmlCDataEndToken" | "XmlProcessingInstructionStartToken" | "XmlProcessingInstructionEndToken" | "BarBarToken" | "AmpersandAmpersandToken" | "MinusMinusToken" | "PlusPlusToken" | "ColonColonToken" | "QuestionQuestionToken" | "MinusGreaterThanToken" | "ExclamationEqualsToken" | "EqualsEqualsToken" | "EqualsGreaterThanToken" | "LessThanEqualsToken" | "LessThanLessThanToken" | "LessThanLessThanEqualsToken" | "GreaterThanEqualsToken" | "GreaterThanGreaterThanToken" | "GreaterThanGreaterThanEqualsToken" | "SlashEqualsToken" | "AsteriskEqualsToken" | "BarEqualsToken" | "AmpersandEqualsToken" | "PlusEqualsToken" | "MinusEqualsToken" | "CaretEqualsToken" | "PercentEqualsToken" | "QuestionQuestionEqualsToken" | "GreaterThanGreaterThanGreaterThanToken" | "GreaterThanGreaterThanGreaterThanEqualsToken" | "BoolKeyword" | "ByteKeyword" | "SByteKeyword" | "ShortKeyword" | "UShortKeyword" | "IntKeyword" | "UIntKeyword" | "LongKeyword" | "ULongKeyword" | "DoubleKeyword" | "FloatKeyword" | "DecimalKeyword" | "StringKeyword" | "CharKeyword" | "VoidKeyword" | "ObjectKeyword" | "TypeOfKeyword" | "SizeOfKeyword" | "NullKeyword" | "TrueKeyword" | "FalseKeyword" | "IfKeyword" | "ElseKeyword" | "WhileKeyword" | "ForKeyword" | "ForEachKeyword" | "DoKeyword" | "SwitchKeyword" | "CaseKeyword" | "DefaultKeyword" | "TryKeyword" | "CatchKeyword" | "FinallyKeyword" | "LockKeyword" | "GotoKeyword" | "BreakKeyword" | "ContinueKeyword" | "ReturnKeyword" | "ThrowKeyword" | "PublicKeyword" | "PrivateKeyword" | "InternalKeyword" | "ProtectedKeyword" | "StaticKeyword" | "ReadOnlyKeyword" | "SealedKeyword" | "ConstKeyword" | "FixedKeyword" | "StackAllocKeyword" | "VolatileKeyword" | "NewKeyword" | "OverrideKeyword" | "AbstractKeyword" | "VirtualKeyword" | "EventKeyword" | "ExternKeyword" | "RefKeyword" | "OutKeyword" | "InKeyword" | "IsKeyword" | "AsKeyword" | "ParamsKeyword" | "ArgListKeyword" | "MakeRefKeyword" | "RefTypeKeyword" | "RefValueKeyword" | "ThisKeyword" | "BaseKeyword" | "NamespaceKeyword" | "UsingKeyword" | "ClassKeyword" | "StructKeyword" | "InterfaceKeyword" | "EnumKeyword" | "DelegateKeyword" | "CheckedKeyword" | "UncheckedKeyword" | "UnsafeKeyword" | "OperatorKeyword" | "ExplicitKeyword" | "ImplicitKeyword" | "YieldKeyword" | "PartialKeyword" | "AliasKeyword" | "GlobalKeyword" | "AssemblyKeyword" | "ModuleKeyword" | "TypeKeyword" | "FieldKeyword" | "MethodKeyword" | "ParamKeyword" | "PropertyKeyword" | "TypeVarKeyword" | "GetKeyword" | "SetKeyword" | "AddKeyword" | "RemoveKeyword" | "WhereKeyword" | "FromKeyword" | "GroupKeyword" | "JoinKeyword" | "IntoKeyword" | "LetKeyword" | "ByKeyword" | "SelectKeyword" | "OrderByKeyword" | "OnKeyword" | "EqualsKeyword" | "AscendingKeyword" | "DescendingKeyword" | "NameOfKeyword" | "AsyncKeyword" | "AwaitKeyword" | "WhenKeyword" | "OrKeyword" | "AndKeyword" | "NotKeyword" | "WithKeyword" | "InitKeyword" | "RecordKeyword" | "ManagedKeyword" | "UnmanagedKeyword" | "RequiredKeyword" | "ScopedKeyword" | "FileKeyword" | "ElifKeyword" | "EndIfKeyword" | "RegionKeyword" | "EndRegionKeyword" | "DefineKeyword" | "UndefKeyword" | "WarningKeyword" | "ErrorKeyword" | "LineKeyword" | "PragmaKeyword" | "HiddenKeyword" | "ChecksumKeyword" | "DisableKeyword" | "RestoreKeyword" | "ReferenceKeyword" | "InterpolatedStringStartToken" | "InterpolatedStringEndToken" | "InterpolatedVerbatimStringStartToken" | "LoadKeyword" | "NullableKeyword" | "EnableKeyword" | "WarningsKeyword" | "AnnotationsKeyword" | "VarKeyword" | "UnderscoreToken" | "OmittedTypeArgumentToken" | "OmittedArraySizeExpressionToken" | "EndOfDirectiveToken" | "EndOfDocumentationCommentToken" | "EndOfFileToken" | "BadToken" | "IdentifierToken" | "NumericLiteralToken" | "CharacterLiteralToken" | "StringLiteralToken" | "XmlEntityLiteralToken" | "XmlTextLiteralToken" | "XmlTextLiteralNewLineToken" | "InterpolatedStringToken" | "InterpolatedStringTextToken" | "SingleLineRawStringLiteralToken" | "MultiLineRawStringLiteralToken" | "Utf8StringLiteralToken" | "Utf8SingleLineRawStringLiteralToken" | "Utf8MultiLineRawStringLiteralToken" | "EndOfLineTrivia" | "WhitespaceTrivia" | "SingleLineCommentTrivia" | "MultiLineCommentTrivia" | "DocumentationCommentExteriorTrivia" | "SingleLineDocumentationCommentTrivia" | "MultiLineDocumentationCommentTrivia" | "DisabledTextTrivia" | "PreprocessingMessageTrivia" | "IfDirectiveTrivia" | "ElifDirectiveTrivia" | "ElseDirectiveTrivia" | "EndIfDirectiveTrivia" | "RegionDirectiveTrivia" | "EndRegionDirectiveTrivia" | "DefineDirectiveTrivia" | "UndefDirectiveTrivia" | "ErrorDirectiveTrivia" | "WarningDirectiveTrivia" | "LineDirectiveTrivia" | "PragmaWarningDirectiveTrivia" | "PragmaChecksumDirectiveTrivia" | "ReferenceDirectiveTrivia" | "BadDirectiveTrivia" | "SkippedTokensTrivia" | "ConflictMarkerTrivia" | "XmlElement" | "XmlElementStartTag" | "XmlElementEndTag" | "XmlEmptyElement" | "XmlTextAttribute" | "XmlCrefAttribute" | "XmlNameAttribute" | "XmlName" | "XmlPrefix" | "XmlText" | "XmlCDataSection" | "XmlComment" | "XmlProcessingInstruction" | "TypeCref" | "QualifiedCref" | "NameMemberCref" | "IndexerMemberCref" | "OperatorMemberCref" | "ConversionOperatorMemberCref" | "CrefParameterList" | "CrefBracketedParameterList" | "CrefParameter" | "IdentifierName" | "QualifiedName" | "GenericName" | "TypeArgumentList" | "AliasQualifiedName" | "PredefinedType" | "ArrayType" | "ArrayRankSpecifier" | "PointerType" | "NullableType" | "OmittedTypeArgument" | "ParenthesizedExpression" | "ConditionalExpression" | "InvocationExpression" | "ElementAccessExpression" | "ArgumentList" | "BracketedArgumentList" | "Argument" | "NameColon" | "CastExpression" | "AnonymousMethodExpression" | "SimpleLambdaExpression" | "ParenthesizedLambdaExpression" | "ObjectInitializerExpression" | "CollectionInitializerExpression" | "ArrayInitializerExpression" | "AnonymousObjectMemberDeclarator" | "ComplexElementInitializerExpression" | "ObjectCreationExpression" | "AnonymousObjectCreationExpression" | "ArrayCreationExpression" | "ImplicitArrayCreationExpression" | "StackAllocArrayCreationExpression" | "OmittedArraySizeExpression" | "InterpolatedStringExpression" | "ImplicitElementAccess" | "IsPatternExpression" | "RangeExpression" | "ImplicitObjectCreationExpression" | "AddExpression" | "SubtractExpression" | "MultiplyExpression" | "DivideExpression" | "ModuloExpression" | "LeftShiftExpression" | "RightShiftExpression" | "LogicalOrExpression" | "LogicalAndExpression" | "BitwiseOrExpression" | "BitwiseAndExpression" | "ExclusiveOrExpression" | "EqualsExpression" | "NotEqualsExpression" | "LessThanExpression" | "LessThanOrEqualExpression" | "GreaterThanExpression" | "GreaterThanOrEqualExpression" | "IsExpression" | "AsExpression" | "CoalesceExpression" | "SimpleMemberAccessExpression" | "PointerMemberAccessExpression" | "ConditionalAccessExpression" | "UnsignedRightShiftExpression" | "MemberBindingExpression" | "ElementBindingExpression" | "SimpleAssignmentExpression" | "AddAssignmentExpression" | "SubtractAssignmentExpression" | "MultiplyAssignmentExpression" | "DivideAssignmentExpression" | "ModuloAssignmentExpression" | "AndAssignmentExpression" | "ExclusiveOrAssignmentExpression" | "OrAssignmentExpression" | "LeftShiftAssignmentExpression" | "RightShiftAssignmentExpression" | "CoalesceAssignmentExpression" | "UnsignedRightShiftAssignmentExpression" | "UnaryPlusExpression" | "UnaryMinusExpression" | "BitwiseNotExpression" | "LogicalNotExpression" | "PreIncrementExpression" | "PreDecrementExpression" | "PointerIndirectionExpression" | "AddressOfExpression" | "PostIncrementExpression" | "PostDecrementExpression" | "AwaitExpression" | "IndexExpression" | "ThisExpression" | "BaseExpression" | "ArgListExpression" | "NumericLiteralExpression" | "StringLiteralExpression" | "CharacterLiteralExpression" | "TrueLiteralExpression" | "FalseLiteralExpression" | "NullLiteralExpression" | "DefaultLiteralExpression" | "Utf8StringLiteralExpression" | "TypeOfExpression" | "SizeOfExpression" | "CheckedExpression" | "UncheckedExpression" | "DefaultExpression" | "MakeRefExpression" | "RefValueExpression" | "RefTypeExpression" | "QueryExpression" | "QueryBody" | "FromClause" | "LetClause" | "JoinClause" | "JoinIntoClause" | "WhereClause" | "OrderByClause" | "AscendingOrdering" | "DescendingOrdering" | "SelectClause" | "GroupClause" | "QueryContinuation" | "Block" | "LocalDeclarationStatement" | "VariableDeclaration" | "VariableDeclarator" | "EqualsValueClause" | "ExpressionStatement" | "EmptyStatement" | "LabeledStatement" | "GotoStatement" | "GotoCaseStatement" | "GotoDefaultStatement" | "BreakStatement" | "ContinueStatement" | "ReturnStatement" | "YieldReturnStatement" | "YieldBreakStatement" | "ThrowStatement" | "WhileStatement" | "DoStatement" | "ForStatement" | "ForEachStatement" | "UsingStatement" | "FixedStatement" | "CheckedStatement" | "UncheckedStatement" | "UnsafeStatement" | "LockStatement" | "IfStatement" | "ElseClause" | "SwitchStatement" | "SwitchSection" | "CaseSwitchLabel" | "DefaultSwitchLabel" | "TryStatement" | "CatchClause" | "CatchDeclaration" | "CatchFilterClause" | "FinallyClause" | "LocalFunctionStatement" | "CompilationUnit" | "GlobalStatement" | "NamespaceDeclaration" | "UsingDirective" | "ExternAliasDirective" | "FileScopedNamespaceDeclaration" | "AttributeList" | "AttributeTargetSpecifier" | "Attribute" | "AttributeArgumentList" | "AttributeArgument" | "NameEquals" | "ClassDeclaration" | "StructDeclaration" | "InterfaceDeclaration" | "EnumDeclaration" | "DelegateDeclaration" | "BaseList" | "SimpleBaseType" | "TypeParameterConstraintClause" | "ConstructorConstraint" | "ClassConstraint" | "StructConstraint" | "TypeConstraint" | "ExplicitInterfaceSpecifier" | "EnumMemberDeclaration" | "FieldDeclaration" | "EventFieldDeclaration" | "MethodDeclaration" | "OperatorDeclaration" | "ConversionOperatorDeclaration" | "ConstructorDeclaration" | "BaseConstructorInitializer" | "ThisConstructorInitializer" | "DestructorDeclaration" | "PropertyDeclaration" | "EventDeclaration" | "IndexerDeclaration" | "AccessorList" | "GetAccessorDeclaration" | "SetAccessorDeclaration" | "AddAccessorDeclaration" | "RemoveAccessorDeclaration" | "UnknownAccessorDeclaration" | "ParameterList" | "BracketedParameterList" | "Parameter" | "TypeParameterList" | "TypeParameter" | "IncompleteMember" | "ArrowExpressionClause" | "Interpolation" | "InterpolatedStringText" | "InterpolationAlignmentClause" | "InterpolationFormatClause" | "ShebangDirectiveTrivia" | "LoadDirectiveTrivia" | "TupleType" | "TupleElement" | "TupleExpression" | "SingleVariableDesignation" | "ParenthesizedVariableDesignation" | "ForEachVariableStatement" | "DeclarationPattern" | "ConstantPattern" | "CasePatternSwitchLabel" | "WhenClause" | "DiscardDesignation" | "RecursivePattern" | "PropertyPatternClause" | "Subpattern" | "PositionalPatternClause" | "DiscardPattern" | "SwitchExpression" | "SwitchExpressionArm" | "VarPattern" | "ParenthesizedPattern" | "RelationalPattern" | "TypePattern" | "OrPattern" | "AndPattern" | "NotPattern" | "SlicePattern" | "ListPattern" | "DeclarationExpression" | "RefExpression" | "RefType" | "ThrowExpression" | "ImplicitStackAllocArrayCreationExpression" | "SuppressNullableWarningExpression" | "NullableDirectiveTrivia" | "FunctionPointerType" | "FunctionPointerParameter" | "FunctionPointerParameterList" | "FunctionPointerCallingConvention" | "InitAccessorDeclaration" | "WithExpression" | "WithInitializerExpression" | "RecordDeclaration" | "DefaultConstraint" | "PrimaryConstructorBaseType" | "FunctionPointerUnmanagedCallingConventionList" | "FunctionPointerUnmanagedCallingConvention" | "RecordStructDeclaration" | "ExpressionColon" | "LineDirectivePosition" | "LineSpanDirectiveTrivia" | "InterpolatedSingleLineRawStringStartToken" | "InterpolatedMultiLineRawStringStartToken" | "InterpolatedRawStringEndToken" | "ScopedType" | "CollectionExpression" | "ExpressionElement" | "SpreadElement";
+export type SyntaxKind = "None" | "List" | "TildeToken" | "ExclamationToken" | "DollarToken" | "PercentToken" | "CaretToken" | "AmpersandToken" | "AsteriskToken" | "OpenParenToken" | "CloseParenToken" | "MinusToken" | "PlusToken" | "EqualsToken" | "OpenBraceToken" | "CloseBraceToken" | "OpenBracketToken" | "CloseBracketToken" | "BarToken" | "BackslashToken" | "ColonToken" | "SemicolonToken" | "DoubleQuoteToken" | "SingleQuoteToken" | "LessThanToken" | "CommaToken" | "GreaterThanToken" | "DotToken" | "QuestionToken" | "HashToken" | "SlashToken" | "DotDotToken" | "SlashGreaterThanToken" | "LessThanSlashToken" | "XmlCommentStartToken" | "XmlCommentEndToken" | "XmlCDataStartToken" | "XmlCDataEndToken" | "XmlProcessingInstructionStartToken" | "XmlProcessingInstructionEndToken" | "BarBarToken" | "AmpersandAmpersandToken" | "MinusMinusToken" | "PlusPlusToken" | "ColonColonToken" | "QuestionQuestionToken" | "MinusGreaterThanToken" | "ExclamationEqualsToken" | "EqualsEqualsToken" | "EqualsGreaterThanToken" | "LessThanEqualsToken" | "LessThanLessThanToken" | "LessThanLessThanEqualsToken" | "GreaterThanEqualsToken" | "GreaterThanGreaterThanToken" | "GreaterThanGreaterThanEqualsToken" | "SlashEqualsToken" | "AsteriskEqualsToken" | "BarEqualsToken" | "AmpersandEqualsToken" | "PlusEqualsToken" | "MinusEqualsToken" | "CaretEqualsToken" | "PercentEqualsToken" | "QuestionQuestionEqualsToken" | "GreaterThanGreaterThanGreaterThanToken" | "GreaterThanGreaterThanGreaterThanEqualsToken" | "BoolKeyword" | "ByteKeyword" | "SByteKeyword" | "ShortKeyword" | "UShortKeyword" | "IntKeyword" | "UIntKeyword" | "LongKeyword" | "ULongKeyword" | "DoubleKeyword" | "FloatKeyword" | "DecimalKeyword" | "StringKeyword" | "CharKeyword" | "VoidKeyword" | "ObjectKeyword" | "TypeOfKeyword" | "SizeOfKeyword" | "NullKeyword" | "TrueKeyword" | "FalseKeyword" | "IfKeyword" | "ElseKeyword" | "WhileKeyword" | "ForKeyword" | "ForEachKeyword" | "DoKeyword" | "SwitchKeyword" | "CaseKeyword" | "DefaultKeyword" | "TryKeyword" | "CatchKeyword" | "FinallyKeyword" | "LockKeyword" | "GotoKeyword" | "BreakKeyword" | "ContinueKeyword" | "ReturnKeyword" | "ThrowKeyword" | "PublicKeyword" | "PrivateKeyword" | "InternalKeyword" | "ProtectedKeyword" | "StaticKeyword" | "ReadOnlyKeyword" | "SealedKeyword" | "ConstKeyword" | "FixedKeyword" | "StackAllocKeyword" | "VolatileKeyword" | "NewKeyword" | "OverrideKeyword" | "AbstractKeyword" | "VirtualKeyword" | "EventKeyword" | "ExternKeyword" | "RefKeyword" | "OutKeyword" | "InKeyword" | "IsKeyword" | "AsKeyword" | "ParamsKeyword" | "ArgListKeyword" | "MakeRefKeyword" | "RefTypeKeyword" | "RefValueKeyword" | "ThisKeyword" | "BaseKeyword" | "NamespaceKeyword" | "UsingKeyword" | "ClassKeyword" | "StructKeyword" | "InterfaceKeyword" | "EnumKeyword" | "DelegateKeyword" | "CheckedKeyword" | "UncheckedKeyword" | "UnsafeKeyword" | "OperatorKeyword" | "ExplicitKeyword" | "ImplicitKeyword" | "YieldKeyword" | "PartialKeyword" | "AliasKeyword" | "GlobalKeyword" | "AssemblyKeyword" | "ModuleKeyword" | "TypeKeyword" | "FieldKeyword" | "MethodKeyword" | "ParamKeyword" | "PropertyKeyword" | "TypeVarKeyword" | "GetKeyword" | "SetKeyword" | "AddKeyword" | "RemoveKeyword" | "WhereKeyword" | "FromKeyword" | "GroupKeyword" | "JoinKeyword" | "IntoKeyword" | "LetKeyword" | "ByKeyword" | "SelectKeyword" | "OrderByKeyword" | "OnKeyword" | "EqualsKeyword" | "AscendingKeyword" | "DescendingKeyword" | "NameOfKeyword" | "AsyncKeyword" | "AwaitKeyword" | "WhenKeyword" | "OrKeyword" | "AndKeyword" | "NotKeyword" | "WithKeyword" | "InitKeyword" | "RecordKeyword" | "ManagedKeyword" | "UnmanagedKeyword" | "RequiredKeyword" | "ScopedKeyword" | "FileKeyword" | "AllowsKeyword" | "ExtensionKeyword" | "ElifKeyword" | "EndIfKeyword" | "RegionKeyword" | "EndRegionKeyword" | "DefineKeyword" | "UndefKeyword" | "WarningKeyword" | "ErrorKeyword" | "LineKeyword" | "PragmaKeyword" | "HiddenKeyword" | "ChecksumKeyword" | "DisableKeyword" | "RestoreKeyword" | "ReferenceKeyword" | "InterpolatedStringStartToken" | "InterpolatedStringEndToken" | "InterpolatedVerbatimStringStartToken" | "LoadKeyword" | "NullableKeyword" | "EnableKeyword" | "WarningsKeyword" | "AnnotationsKeyword" | "VarKeyword" | "UnderscoreToken" | "OmittedTypeArgumentToken" | "OmittedArraySizeExpressionToken" | "EndOfDirectiveToken" | "EndOfDocumentationCommentToken" | "EndOfFileToken" | "BadToken" | "IdentifierToken" | "NumericLiteralToken" | "CharacterLiteralToken" | "StringLiteralToken" | "XmlEntityLiteralToken" | "XmlTextLiteralToken" | "XmlTextLiteralNewLineToken" | "InterpolatedStringToken" | "InterpolatedStringTextToken" | "SingleLineRawStringLiteralToken" | "MultiLineRawStringLiteralToken" | "Utf8StringLiteralToken" | "Utf8SingleLineRawStringLiteralToken" | "Utf8MultiLineRawStringLiteralToken" | "RazorContentToken" | "EndOfLineTrivia" | "WhitespaceTrivia" | "SingleLineCommentTrivia" | "MultiLineCommentTrivia" | "DocumentationCommentExteriorTrivia" | "SingleLineDocumentationCommentTrivia" | "MultiLineDocumentationCommentTrivia" | "DisabledTextTrivia" | "PreprocessingMessageTrivia" | "IfDirectiveTrivia" | "ElifDirectiveTrivia" | "ElseDirectiveTrivia" | "EndIfDirectiveTrivia" | "RegionDirectiveTrivia" | "EndRegionDirectiveTrivia" | "DefineDirectiveTrivia" | "UndefDirectiveTrivia" | "ErrorDirectiveTrivia" | "WarningDirectiveTrivia" | "LineDirectiveTrivia" | "PragmaWarningDirectiveTrivia" | "PragmaChecksumDirectiveTrivia" | "ReferenceDirectiveTrivia" | "BadDirectiveTrivia" | "SkippedTokensTrivia" | "ConflictMarkerTrivia" | "XmlElement" | "XmlElementStartTag" | "XmlElementEndTag" | "XmlEmptyElement" | "XmlTextAttribute" | "XmlCrefAttribute" | "XmlNameAttribute" | "XmlName" | "XmlPrefix" | "XmlText" | "XmlCDataSection" | "XmlComment" | "XmlProcessingInstruction" | "TypeCref" | "QualifiedCref" | "NameMemberCref" | "IndexerMemberCref" | "OperatorMemberCref" | "ConversionOperatorMemberCref" | "CrefParameterList" | "CrefBracketedParameterList" | "CrefParameter" | "IdentifierName" | "QualifiedName" | "GenericName" | "TypeArgumentList" | "AliasQualifiedName" | "PredefinedType" | "ArrayType" | "ArrayRankSpecifier" | "PointerType" | "NullableType" | "OmittedTypeArgument" | "ParenthesizedExpression" | "ConditionalExpression" | "InvocationExpression" | "ElementAccessExpression" | "ArgumentList" | "BracketedArgumentList" | "Argument" | "NameColon" | "CastExpression" | "AnonymousMethodExpression" | "SimpleLambdaExpression" | "ParenthesizedLambdaExpression" | "ObjectInitializerExpression" | "CollectionInitializerExpression" | "ArrayInitializerExpression" | "AnonymousObjectMemberDeclarator" | "ComplexElementInitializerExpression" | "ObjectCreationExpression" | "AnonymousObjectCreationExpression" | "ArrayCreationExpression" | "ImplicitArrayCreationExpression" | "StackAllocArrayCreationExpression" | "OmittedArraySizeExpression" | "InterpolatedStringExpression" | "ImplicitElementAccess" | "IsPatternExpression" | "RangeExpression" | "ImplicitObjectCreationExpression" | "AddExpression" | "SubtractExpression" | "MultiplyExpression" | "DivideExpression" | "ModuloExpression" | "LeftShiftExpression" | "RightShiftExpression" | "LogicalOrExpression" | "LogicalAndExpression" | "BitwiseOrExpression" | "BitwiseAndExpression" | "ExclusiveOrExpression" | "EqualsExpression" | "NotEqualsExpression" | "LessThanExpression" | "LessThanOrEqualExpression" | "GreaterThanExpression" | "GreaterThanOrEqualExpression" | "IsExpression" | "AsExpression" | "CoalesceExpression" | "SimpleMemberAccessExpression" | "PointerMemberAccessExpression" | "ConditionalAccessExpression" | "UnsignedRightShiftExpression" | "MemberBindingExpression" | "ElementBindingExpression" | "SimpleAssignmentExpression" | "AddAssignmentExpression" | "SubtractAssignmentExpression" | "MultiplyAssignmentExpression" | "DivideAssignmentExpression" | "ModuloAssignmentExpression" | "AndAssignmentExpression" | "ExclusiveOrAssignmentExpression" | "OrAssignmentExpression" | "LeftShiftAssignmentExpression" | "RightShiftAssignmentExpression" | "CoalesceAssignmentExpression" | "UnsignedRightShiftAssignmentExpression" | "UnaryPlusExpression" | "UnaryMinusExpression" | "BitwiseNotExpression" | "LogicalNotExpression" | "PreIncrementExpression" | "PreDecrementExpression" | "PointerIndirectionExpression" | "AddressOfExpression" | "PostIncrementExpression" | "PostDecrementExpression" | "AwaitExpression" | "IndexExpression" | "ThisExpression" | "BaseExpression" | "ArgListExpression" | "NumericLiteralExpression" | "StringLiteralExpression" | "CharacterLiteralExpression" | "TrueLiteralExpression" | "FalseLiteralExpression" | "NullLiteralExpression" | "DefaultLiteralExpression" | "Utf8StringLiteralExpression" | "FieldExpression" | "TypeOfExpression" | "SizeOfExpression" | "CheckedExpression" | "UncheckedExpression" | "DefaultExpression" | "MakeRefExpression" | "RefValueExpression" | "RefTypeExpression" | "QueryExpression" | "QueryBody" | "FromClause" | "LetClause" | "JoinClause" | "JoinIntoClause" | "WhereClause" | "OrderByClause" | "AscendingOrdering" | "DescendingOrdering" | "SelectClause" | "GroupClause" | "QueryContinuation" | "Block" | "LocalDeclarationStatement" | "VariableDeclaration" | "VariableDeclarator" | "EqualsValueClause" | "ExpressionStatement" | "EmptyStatement" | "LabeledStatement" | "GotoStatement" | "GotoCaseStatement" | "GotoDefaultStatement" | "BreakStatement" | "ContinueStatement" | "ReturnStatement" | "YieldReturnStatement" | "YieldBreakStatement" | "ThrowStatement" | "WhileStatement" | "DoStatement" | "ForStatement" | "ForEachStatement" | "UsingStatement" | "FixedStatement" | "CheckedStatement" | "UncheckedStatement" | "UnsafeStatement" | "LockStatement" | "IfStatement" | "ElseClause" | "SwitchStatement" | "SwitchSection" | "CaseSwitchLabel" | "DefaultSwitchLabel" | "TryStatement" | "CatchClause" | "CatchDeclaration" | "CatchFilterClause" | "FinallyClause" | "LocalFunctionStatement" | "CompilationUnit" | "GlobalStatement" | "NamespaceDeclaration" | "UsingDirective" | "ExternAliasDirective" | "FileScopedNamespaceDeclaration" | "AttributeList" | "AttributeTargetSpecifier" | "Attribute" | "AttributeArgumentList" | "AttributeArgument" | "NameEquals" | "ClassDeclaration" | "StructDeclaration" | "InterfaceDeclaration" | "EnumDeclaration" | "DelegateDeclaration" | "BaseList" | "SimpleBaseType" | "TypeParameterConstraintClause" | "ConstructorConstraint" | "ClassConstraint" | "StructConstraint" | "TypeConstraint" | "ExplicitInterfaceSpecifier" | "EnumMemberDeclaration" | "FieldDeclaration" | "EventFieldDeclaration" | "MethodDeclaration" | "OperatorDeclaration" | "ConversionOperatorDeclaration" | "ConstructorDeclaration" | "AllowsConstraintClause" | "RefStructConstraint" | "BaseConstructorInitializer" | "ThisConstructorInitializer" | "DestructorDeclaration" | "PropertyDeclaration" | "EventDeclaration" | "IndexerDeclaration" | "AccessorList" | "GetAccessorDeclaration" | "SetAccessorDeclaration" | "AddAccessorDeclaration" | "RemoveAccessorDeclaration" | "UnknownAccessorDeclaration" | "ParameterList" | "BracketedParameterList" | "Parameter" | "TypeParameterList" | "TypeParameter" | "IncompleteMember" | "ArrowExpressionClause" | "Interpolation" | "InterpolatedStringText" | "InterpolationAlignmentClause" | "InterpolationFormatClause" | "ShebangDirectiveTrivia" | "LoadDirectiveTrivia" | "TupleType" | "TupleElement" | "TupleExpression" | "SingleVariableDesignation" | "ParenthesizedVariableDesignation" | "ForEachVariableStatement" | "DeclarationPattern" | "ConstantPattern" | "CasePatternSwitchLabel" | "WhenClause" | "DiscardDesignation" | "RecursivePattern" | "PropertyPatternClause" | "Subpattern" | "PositionalPatternClause" | "DiscardPattern" | "SwitchExpression" | "SwitchExpressionArm" | "VarPattern" | "ParenthesizedPattern" | "RelationalPattern" | "TypePattern" | "OrPattern" | "AndPattern" | "NotPattern" | "SlicePattern" | "ListPattern" | "DeclarationExpression" | "RefExpression" | "RefType" | "ThrowExpression" | "ImplicitStackAllocArrayCreationExpression" | "SuppressNullableWarningExpression" | "NullableDirectiveTrivia" | "FunctionPointerType" | "FunctionPointerParameter" | "FunctionPointerParameterList" | "FunctionPointerCallingConvention" | "InitAccessorDeclaration" | "WithExpression" | "WithInitializerExpression" | "RecordDeclaration" | "DefaultConstraint" | "PrimaryConstructorBaseType" | "FunctionPointerUnmanagedCallingConventionList" | "FunctionPointerUnmanagedCallingConvention" | "RecordStructDeclaration" | "ExpressionColon" | "LineDirectivePosition" | "LineSpanDirectiveTrivia" | "InterpolatedSingleLineRawStringStartToken" | "InterpolatedMultiLineRawStringStartToken" | "InterpolatedRawStringEndToken" | "ScopedType" | "CollectionExpression" | "ExpressionElement" | "SpreadElement" | "ExtensionDeclaration" | "IgnoredDirectiveTrivia";
 
 export class LinePositionSpan implements ILinePositionSpan {
     start!: LinePosition;
@@ -4034,6 +4925,73 @@ export interface ISyntaxTriviaSlim {
     displayValue?: string | undefined;
 }
 
+export class GetAllConnectionsResponse implements IGetAllConnectionsResponse {
+    connections!: DataConnection[];
+    servers!: DatabaseServerConnection[];
+
+    constructor(data?: IGetAllConnectionsResponse) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.connections = [];
+            this.servers = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["connections"])) {
+                this.connections = [] as any;
+                for (let item of _data["connections"])
+                    this.connections!.push(DataConnection.fromJS(item));
+            }
+            if (Array.isArray(_data["servers"])) {
+                this.servers = [] as any;
+                for (let item of _data["servers"])
+                    this.servers!.push(DatabaseServerConnection.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): GetAllConnectionsResponse {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetAllConnectionsResponse();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.connections)) {
+            data["connections"] = [];
+            for (let item of this.connections)
+                data["connections"].push(item ? item.toJSON() : <any>undefined);
+        }
+        if (Array.isArray(this.servers)) {
+            data["servers"] = [];
+            for (let item of this.servers)
+                data["servers"].push(item ? item.toJSON() : <any>undefined);
+        }
+        return data;
+    }
+
+    clone(): GetAllConnectionsResponse {
+        const json = this.toJSON();
+        let result = new GetAllConnectionsResponse();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IGetAllConnectionsResponse {
+    connections: DataConnection[];
+    servers: DatabaseServerConnection[];
+}
+
 /** A connection to a data source (ex. a database, a flat file...etc.) */
 export abstract class DataConnection implements IDataConnection {
     id!: string;
@@ -4068,9 +5026,6 @@ export abstract class DataConnection implements IDataConnection {
         if (data["discriminator"] === "EntityFrameworkDatabaseConnection") {
             throw new Error("The abstract class 'EntityFrameworkDatabaseConnection' cannot be instantiated.");
         }
-        if (data["discriminator"] === "EntityFrameworkRelationalDatabaseConnection") {
-            throw new Error("The abstract class 'EntityFrameworkRelationalDatabaseConnection' cannot be instantiated.");
-        }
         if (data["discriminator"] === "MsSqlServerDatabaseConnection") {
             let result = new MsSqlServerDatabaseConnection();
             result.init(data);
@@ -4101,6 +5056,32 @@ export abstract class DataConnection implements IDataConnection {
             result.init(data);
             return result;
         }
+        if (data["discriminator"] === "DatabaseServerConnection") {
+            throw new Error("The abstract class 'DatabaseServerConnection' cannot be instantiated.");
+        }
+        if (data["discriminator"] === "EntityFrameworkDatabaseServerConnection") {
+            throw new Error("The abstract class 'EntityFrameworkDatabaseServerConnection' cannot be instantiated.");
+        }
+        if (data["discriminator"] === "MsSqlServerDatabaseServerConnection") {
+            let result = new MsSqlServerDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "PostgreSqlDatabaseServerConnection") {
+            let result = new PostgreSqlDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "MySqlDatabaseServerConnection") {
+            let result = new MySqlDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "MariaDbDatabaseServerConnection") {
+            let result = new MariaDbDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
         throw new Error("The abstract class 'DataConnection' cannot be instantiated.");
     }
 
@@ -4126,6 +5107,123 @@ export interface IDataConnection {
 }
 
 export type DataConnectionType = "MSSQLServer" | "PostgreSQL" | "SQLite" | "MySQL" | "MariaDB" | "Oracle";
+
+/** A connection to a database server. */
+export abstract class DatabaseServerConnection extends DataConnection implements IDatabaseServerConnection {
+    host?: string | undefined;
+    port?: string | undefined;
+    userId?: string | undefined;
+    password?: string | undefined;
+    containsProductionData!: boolean;
+    /** A partial connection string that is used to add or override values in the final connection string.
+For example, if this value is Timeout=300:
+  - When connection string is "Server=file.db;Password=123;Timeout=100" the resulting final
+    connection string will be:
+      "Server=file.db;Password=123;Timeout=300"
+  - When connection string is "Server=file.db;Password=123;" the resulting final
+    connection string will be:
+      "Server=file.db;Password=123;Timeout=300" */
+    connectionStringAugment?: string | undefined;
+    /** The databases hosted on this server that the user has selected to include. */
+    selectedDatabaseNames!: string[];
+
+    protected _discriminator: string;
+
+    constructor(data?: IDatabaseServerConnection) {
+        super(data);
+        if (!data) {
+            this.selectedDatabaseNames = [];
+        }
+        this._discriminator = "DatabaseServerConnection";
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.host = _data["host"];
+            this.port = _data["port"];
+            this.userId = _data["userId"];
+            this.password = _data["password"];
+            this.containsProductionData = _data["containsProductionData"];
+            this.connectionStringAugment = _data["connectionStringAugment"];
+            if (Array.isArray(_data["selectedDatabaseNames"])) {
+                this.selectedDatabaseNames = [] as any;
+                for (let item of _data["selectedDatabaseNames"])
+                    this.selectedDatabaseNames!.push(item);
+            }
+        }
+    }
+
+    static override fromJS(data: any): DatabaseServerConnection {
+        data = typeof data === 'object' ? data : {};
+        if (data["discriminator"] === "EntityFrameworkDatabaseServerConnection") {
+            throw new Error("The abstract class 'EntityFrameworkDatabaseServerConnection' cannot be instantiated.");
+        }
+        if (data["discriminator"] === "MsSqlServerDatabaseServerConnection") {
+            let result = new MsSqlServerDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "PostgreSqlDatabaseServerConnection") {
+            let result = new PostgreSqlDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "MySqlDatabaseServerConnection") {
+            let result = new MySqlDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "MariaDbDatabaseServerConnection") {
+            let result = new MariaDbDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        throw new Error("The abstract class 'DatabaseServerConnection' cannot be instantiated.");
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["discriminator"] = this._discriminator;
+        data["host"] = this.host;
+        data["port"] = this.port;
+        data["userId"] = this.userId;
+        data["password"] = this.password;
+        data["containsProductionData"] = this.containsProductionData;
+        data["connectionStringAugment"] = this.connectionStringAugment;
+        if (Array.isArray(this.selectedDatabaseNames)) {
+            data["selectedDatabaseNames"] = [];
+            for (let item of this.selectedDatabaseNames)
+                data["selectedDatabaseNames"].push(item);
+        }
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): DatabaseServerConnection {
+        throw new Error("The abstract class 'DatabaseServerConnection' cannot be instantiated.");
+    }
+}
+
+/** A connection to a database server. */
+export interface IDatabaseServerConnection extends IDataConnection {
+    host?: string | undefined;
+    port?: string | undefined;
+    userId?: string | undefined;
+    password?: string | undefined;
+    containsProductionData: boolean;
+    /** A partial connection string that is used to add or override values in the final connection string.
+For example, if this value is Timeout=300:
+  - When connection string is "Server=file.db;Password=123;Timeout=100" the resulting final
+    connection string will be:
+      "Server=file.db;Password=123;Timeout=300"
+  - When connection string is "Server=file.db;Password=123;" the resulting final
+    connection string will be:
+      "Server=file.db;Password=123;Timeout=300" */
+    connectionStringAugment?: string | undefined;
+    /** The databases hosted on this server that the user has selected to include. */
+    selectedDatabaseNames: string[];
+}
 
 export class DataConnectionTestResult implements IDataConnectionTestResult {
     success!: boolean;
@@ -4555,7 +5653,219 @@ export interface IDatabaseTableNavigation {
 }
 
 /** A version of the .NET framework. */
-export type DotNetFrameworkVersion = "DotNet5" | "DotNet6" | "DotNet7" | "DotNet8" | "DotNet9";
+export type DotNetFrameworkVersion = "DotNet5" | "DotNet6" | "DotNet7" | "DotNet8" | "DotNet9" | "DotNet10";
+
+export class HeadlessRunResult implements IHeadlessRunResult {
+    status!: string;
+    success!: boolean;
+    durationMs!: number;
+    output!: ScriptOutput[];
+    compilationErrors?: string[] | undefined;
+    error?: string | undefined;
+
+    constructor(data?: IHeadlessRunResult) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.output = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.status = _data["status"];
+            this.success = _data["success"];
+            this.durationMs = _data["durationMs"];
+            if (Array.isArray(_data["output"])) {
+                this.output = [] as any;
+                for (let item of _data["output"])
+                    this.output!.push(ScriptOutput.fromJS(item));
+            }
+            if (Array.isArray(_data["compilationErrors"])) {
+                this.compilationErrors = [] as any;
+                for (let item of _data["compilationErrors"])
+                    this.compilationErrors!.push(item);
+            }
+            this.error = _data["error"];
+        }
+    }
+
+    static fromJS(data: any): HeadlessRunResult {
+        data = typeof data === 'object' ? data : {};
+        let result = new HeadlessRunResult();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["status"] = this.status;
+        data["success"] = this.success;
+        data["durationMs"] = this.durationMs;
+        if (Array.isArray(this.output)) {
+            data["output"] = [];
+            for (let item of this.output)
+                data["output"].push(item ? item.toJSON() : <any>undefined);
+        }
+        if (Array.isArray(this.compilationErrors)) {
+            data["compilationErrors"] = [];
+            for (let item of this.compilationErrors)
+                data["compilationErrors"].push(item);
+        }
+        data["error"] = this.error;
+        return data;
+    }
+
+    clone(): HeadlessRunResult {
+        const json = this.toJSON();
+        let result = new HeadlessRunResult();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IHeadlessRunResult {
+    status: string;
+    success: boolean;
+    durationMs: number;
+    output: ScriptOutput[];
+    compilationErrors?: string[] | undefined;
+    error?: string | undefined;
+}
+
+export class ScriptOutput implements IScriptOutput {
+    kind!: ScriptOutputKind;
+    order!: number;
+    body?: string | undefined;
+    format!: ScriptOutputFormat;
+
+    constructor(data?: IScriptOutput) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.kind = _data["kind"];
+            this.order = _data["order"];
+            this.body = _data["body"];
+            this.format = _data["format"];
+        }
+    }
+
+    static fromJS(data: any): ScriptOutput {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptOutput();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
+        data["order"] = this.order;
+        data["body"] = this.body;
+        data["format"] = this.format;
+        return data;
+    }
+
+    clone(): ScriptOutput {
+        const json = this.toJSON();
+        let result = new ScriptOutput();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptOutput {
+    kind: ScriptOutputKind;
+    order: number;
+    body?: string | undefined;
+    format: ScriptOutputFormat;
+}
+
+export type ScriptOutputKind = "Result" | "Sql" | "Error";
+
+export type ScriptOutputFormat = "Text" | "Html" | "Json";
+
+export class HeadlessRunRequest implements IHeadlessRunRequest {
+    code!: string;
+    kind!: string;
+    references?: Reference[] | undefined;
+    targetFramework?: DotNetFrameworkVersion | undefined;
+    dataConnectionId?: string | undefined;
+    timeoutMs?: number | undefined;
+
+    constructor(data?: IHeadlessRunRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.code = _data["code"];
+            this.kind = _data["kind"];
+            if (Array.isArray(_data["references"])) {
+                this.references = [] as any;
+                for (let item of _data["references"])
+                    this.references!.push(Reference.fromJS(item));
+            }
+            this.targetFramework = _data["targetFramework"];
+            this.dataConnectionId = _data["dataConnectionId"];
+            this.timeoutMs = _data["timeoutMs"];
+        }
+    }
+
+    static fromJS(data: any): HeadlessRunRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new HeadlessRunRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["code"] = this.code;
+        data["kind"] = this.kind;
+        if (Array.isArray(this.references)) {
+            data["references"] = [];
+            for (let item of this.references)
+                data["references"].push(item ? item.toJSON() : <any>undefined);
+        }
+        data["targetFramework"] = this.targetFramework;
+        data["dataConnectionId"] = this.dataConnectionId;
+        data["timeoutMs"] = this.timeoutMs;
+        return data;
+    }
+
+    clone(): HeadlessRunRequest {
+        const json = this.toJSON();
+        let result = new HeadlessRunRequest();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IHeadlessRunRequest {
+    code: string;
+    kind: string;
+    references?: Reference[] | undefined;
+    targetFramework?: DotNetFrameworkVersion | undefined;
+    dataConnectionId?: string | undefined;
+    timeoutMs?: number | undefined;
+}
 
 /** Information about a package. */
 export class PackageMetadata implements IPackageMetadata {
@@ -4850,8 +6160,10 @@ export interface IPackageIdentity {
 export class ScriptSummary implements IScriptSummary {
     id!: string;
     name!: string;
-    path!: string;
+    path?: string | undefined;
     kind!: ScriptKind;
+    targetFrameworkVersion!: DotNetFrameworkVersion;
+    dataConnectionId?: string | undefined;
 
     constructor(data?: IScriptSummary) {
         if (data) {
@@ -4868,6 +6180,8 @@ export class ScriptSummary implements IScriptSummary {
             this.name = _data["name"];
             this.path = _data["path"];
             this.kind = _data["kind"];
+            this.targetFrameworkVersion = _data["targetFrameworkVersion"];
+            this.dataConnectionId = _data["dataConnectionId"];
         }
     }
 
@@ -4884,6 +6198,8 @@ export class ScriptSummary implements IScriptSummary {
         data["name"] = this.name;
         data["path"] = this.path;
         data["kind"] = this.kind;
+        data["targetFrameworkVersion"] = this.targetFrameworkVersion;
+        data["dataConnectionId"] = this.dataConnectionId;
         return data;
     }
 
@@ -4899,182 +6215,69 @@ export class ScriptSummary implements IScriptSummary {
 export interface IScriptSummary {
     id: string;
     name: string;
-    path: string;
+    path?: string | undefined;
     kind: ScriptKind;
+    targetFrameworkVersion: DotNetFrameworkVersion;
+    dataConnectionId?: string | undefined;
 }
 
 export type ScriptKind = "Expression" | "Program" | "SQL";
 
-export class CreateScriptDto implements ICreateScriptDto {
-    code?: string | undefined;
-    dataConnectionId?: string | undefined;
-    runImmediately!: boolean;
-
-    constructor(data?: ICreateScriptDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.code = _data["code"];
-            this.dataConnectionId = _data["dataConnectionId"];
-            this.runImmediately = _data["runImmediately"];
-        }
-    }
-
-    static fromJS(data: any): CreateScriptDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateScriptDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["code"] = this.code;
-        data["dataConnectionId"] = this.dataConnectionId;
-        data["runImmediately"] = this.runImmediately;
-        return data;
-    }
-
-    clone(): CreateScriptDto {
-        const json = this.toJSON();
-        let result = new CreateScriptDto();
-        result.init(json);
-        return result;
-    }
-}
-
-export interface ICreateScriptDto {
-    code?: string | undefined;
-    dataConnectionId?: string | undefined;
-    runImmediately: boolean;
-}
-
-/** Represents a set of options that control how a script is executed. */
-export class RunOptions implements IRunOptions {
-    /** Gets or sets a snippet of code to run instead of the full script. */
-    specificCodeToRun?: string | undefined;
-
-    constructor(data?: IRunOptions) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.specificCodeToRun = _data["specificCodeToRun"];
-        }
-    }
-
-    static fromJS(data: any): RunOptions {
-        data = typeof data === 'object' ? data : {};
-        let result = new RunOptions();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["specificCodeToRun"] = this.specificCodeToRun;
-        return data;
-    }
-
-    clone(): RunOptions {
-        const json = this.toJSON();
-        let result = new RunOptions();
-        result.init(json);
-        return result;
-    }
-}
-
-/** Represents a set of options that control how a script is executed. */
-export interface IRunOptions {
-    /** Gets or sets a snippet of code to run instead of the full script. */
-    specificCodeToRun?: string | undefined;
-}
-
-/** Provides a managed execution context for a Script used to run it, track its status, receive script output and provide input when requested. Many high level operations throughout the application run against a ScriptEnvironment instead of the Script itself. */
-export class ScriptEnvironment implements IScriptEnvironment {
-    script!: Script;
-    status!: ScriptStatus;
+/** Basic information about a script and its current state within the running application. */
+export class ScriptInfo extends ScriptSummary implements IScriptInfo {
+    isOpen!: boolean;
+    isDirty!: boolean;
+    status?: ScriptStatus | undefined;
     runDurationMilliseconds?: number | undefined;
-    memCacheItems!: MemCacheItemInfo[];
-    isScriptHostRunning!: boolean;
 
-    constructor(data?: IScriptEnvironment) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-        if (!data) {
-            this.script = new Script();
-            this.memCacheItems = [];
-        }
+    constructor(data?: IScriptInfo) {
+        super(data);
     }
 
-    init(_data?: any) {
+    override init(_data?: any) {
+        super.init(_data);
         if (_data) {
-            this.script = _data["script"] ? Script.fromJS(_data["script"]) : new Script();
+            this.isOpen = _data["isOpen"];
+            this.isDirty = _data["isDirty"];
             this.status = _data["status"];
             this.runDurationMilliseconds = _data["runDurationMilliseconds"];
-            if (Array.isArray(_data["memCacheItems"])) {
-                this.memCacheItems = [] as any;
-                for (let item of _data["memCacheItems"])
-                    this.memCacheItems!.push(MemCacheItemInfo.fromJS(item));
-            }
-            this.isScriptHostRunning = _data["isScriptHostRunning"];
         }
     }
 
-    static fromJS(data: any): ScriptEnvironment {
+    static override fromJS(data: any): ScriptInfo {
         data = typeof data === 'object' ? data : {};
-        let result = new ScriptEnvironment();
+        let result = new ScriptInfo();
         result.init(data);
         return result;
     }
 
-    toJSON(data?: any) {
+    override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["script"] = this.script ? this.script.toJSON() : <any>undefined;
+        data["isOpen"] = this.isOpen;
+        data["isDirty"] = this.isDirty;
         data["status"] = this.status;
         data["runDurationMilliseconds"] = this.runDurationMilliseconds;
-        if (Array.isArray(this.memCacheItems)) {
-            data["memCacheItems"] = [];
-            for (let item of this.memCacheItems)
-                data["memCacheItems"].push(item ? item.toJSON() : <any>undefined);
-        }
-        data["isScriptHostRunning"] = this.isScriptHostRunning;
+        super.toJSON(data);
         return data;
     }
 
-    clone(): ScriptEnvironment {
+    clone(): ScriptInfo {
         const json = this.toJSON();
-        let result = new ScriptEnvironment();
+        let result = new ScriptInfo();
         result.init(json);
         return result;
     }
 }
 
-/** Provides a managed execution context for a Script used to run it, track its status, receive script output and provide input when requested. Many high level operations throughout the application run against a ScriptEnvironment instead of the Script itself. */
-export interface IScriptEnvironment {
-    script: Script;
-    status: ScriptStatus;
+/** Basic information about a script and its current state within the running application. */
+export interface IScriptInfo extends IScriptSummary {
+    isOpen: boolean;
+    isDirty: boolean;
+    status?: ScriptStatus | undefined;
     runDurationMilliseconds?: number | undefined;
-    memCacheItems: MemCacheItemInfo[];
-    isScriptHostRunning: boolean;
 }
+
+export type ScriptStatus = "Ready" | "Running" | "Stopping" | "Error";
 
 /** A user script. */
 export class Script implements IScript {
@@ -5243,7 +6446,220 @@ export interface IScriptConfig {
 
 export type OptimizationLevel = "Debug" | "Release";
 
-export type ScriptStatus = "Ready" | "Running" | "Stopping" | "Error";
+export class CreateScriptDto implements ICreateScriptDto {
+    name?: string | undefined;
+    code?: string | undefined;
+    dataConnectionId?: string | undefined;
+    kind?: ScriptKind | undefined;
+    targetFrameworkVersion?: DotNetFrameworkVersion | undefined;
+    optimizationLevel?: OptimizationLevel | undefined;
+    useAspNet?: boolean | undefined;
+    namespaces?: string[] | undefined;
+    references?: Reference[] | undefined;
+    runImmediately!: boolean;
+
+    constructor(data?: ICreateScriptDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.code = _data["code"];
+            this.dataConnectionId = _data["dataConnectionId"];
+            this.kind = _data["kind"];
+            this.targetFrameworkVersion = _data["targetFrameworkVersion"];
+            this.optimizationLevel = _data["optimizationLevel"];
+            this.useAspNet = _data["useAspNet"];
+            if (Array.isArray(_data["namespaces"])) {
+                this.namespaces = [] as any;
+                for (let item of _data["namespaces"])
+                    this.namespaces!.push(item);
+            }
+            if (Array.isArray(_data["references"])) {
+                this.references = [] as any;
+                for (let item of _data["references"])
+                    this.references!.push(Reference.fromJS(item));
+            }
+            this.runImmediately = _data["runImmediately"];
+        }
+    }
+
+    static fromJS(data: any): CreateScriptDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateScriptDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["code"] = this.code;
+        data["dataConnectionId"] = this.dataConnectionId;
+        data["kind"] = this.kind;
+        data["targetFrameworkVersion"] = this.targetFrameworkVersion;
+        data["optimizationLevel"] = this.optimizationLevel;
+        data["useAspNet"] = this.useAspNet;
+        if (Array.isArray(this.namespaces)) {
+            data["namespaces"] = [];
+            for (let item of this.namespaces)
+                data["namespaces"].push(item);
+        }
+        if (Array.isArray(this.references)) {
+            data["references"] = [];
+            for (let item of this.references)
+                data["references"].push(item ? item.toJSON() : <any>undefined);
+        }
+        data["runImmediately"] = this.runImmediately;
+        return data;
+    }
+
+    clone(): CreateScriptDto {
+        const json = this.toJSON();
+        let result = new CreateScriptDto();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface ICreateScriptDto {
+    name?: string | undefined;
+    code?: string | undefined;
+    dataConnectionId?: string | undefined;
+    kind?: ScriptKind | undefined;
+    targetFrameworkVersion?: DotNetFrameworkVersion | undefined;
+    optimizationLevel?: OptimizationLevel | undefined;
+    useAspNet?: boolean | undefined;
+    namespaces?: string[] | undefined;
+    references?: Reference[] | undefined;
+    runImmediately: boolean;
+}
+
+/** Represents a set of options that control how a script is executed. */
+export class RunOptions implements IRunOptions {
+    /** Gets or sets a snippet of code to run instead of the full script. */
+    specificCodeToRun?: string | undefined;
+
+    constructor(data?: IRunOptions) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.specificCodeToRun = _data["specificCodeToRun"];
+        }
+    }
+
+    static fromJS(data: any): RunOptions {
+        data = typeof data === 'object' ? data : {};
+        let result = new RunOptions();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["specificCodeToRun"] = this.specificCodeToRun;
+        return data;
+    }
+
+    clone(): RunOptions {
+        const json = this.toJSON();
+        let result = new RunOptions();
+        result.init(json);
+        return result;
+    }
+}
+
+/** Represents a set of options that control how a script is executed. */
+export interface IRunOptions {
+    /** Gets or sets a snippet of code to run instead of the full script. */
+    specificCodeToRun?: string | undefined;
+}
+
+/** Provides a managed execution context for a Script used to run it, track its status, receive script output and provide input when requested. Many high level operations throughout the application run against a ScriptEnvironment instead of the Script itself. */
+export class ScriptEnvironment implements IScriptEnvironment {
+    script!: Script;
+    status!: ScriptStatus;
+    runDurationMilliseconds?: number | undefined;
+    memCacheItems!: MemCacheItemInfo[];
+    isScriptHostRunning!: boolean;
+
+    constructor(data?: IScriptEnvironment) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.script = new Script();
+            this.memCacheItems = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.script = _data["script"] ? Script.fromJS(_data["script"]) : new Script();
+            this.status = _data["status"];
+            this.runDurationMilliseconds = _data["runDurationMilliseconds"];
+            if (Array.isArray(_data["memCacheItems"])) {
+                this.memCacheItems = [] as any;
+                for (let item of _data["memCacheItems"])
+                    this.memCacheItems!.push(MemCacheItemInfo.fromJS(item));
+            }
+            this.isScriptHostRunning = _data["isScriptHostRunning"];
+        }
+    }
+
+    static fromJS(data: any): ScriptEnvironment {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptEnvironment();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["script"] = this.script ? this.script.toJSON() : <any>undefined;
+        data["status"] = this.status;
+        data["runDurationMilliseconds"] = this.runDurationMilliseconds;
+        if (Array.isArray(this.memCacheItems)) {
+            data["memCacheItems"] = [];
+            for (let item of this.memCacheItems)
+                data["memCacheItems"].push(item ? item.toJSON() : <any>undefined);
+        }
+        data["isScriptHostRunning"] = this.isScriptHostRunning;
+        return data;
+    }
+
+    clone(): ScriptEnvironment {
+        const json = this.toJSON();
+        let result = new ScriptEnvironment();
+        result.init(json);
+        return result;
+    }
+}
+
+/** Provides a managed execution context for a Script used to run it, track its status, receive script output and provide input when requested. Many high level operations throughout the application run against a ScriptEnvironment instead of the Script itself. */
+export interface IScriptEnvironment {
+    script: Script;
+    status: ScriptStatus;
+    runDurationMilliseconds?: number | undefined;
+    memCacheItems: MemCacheItemInfo[];
+    isScriptHostRunning: boolean;
+}
 
 /** Info about an item stored in MemCache. */
 export class MemCacheItemInfo implements IMemCacheItemInfo {
@@ -5312,6 +6728,61 @@ will always return true. */
     valueInitialized: boolean;
     /** Whether a factory, or an async factory, was used when adding the item to the cache. */
     isFactory: boolean;
+}
+
+export class ScriptStatusDto implements IScriptStatusDto {
+    scriptId!: string;
+    name!: string;
+    status!: ScriptStatus;
+    runDurationMs?: number | undefined;
+
+    constructor(data?: IScriptStatusDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            this.name = _data["name"];
+            this.status = _data["status"];
+            this.runDurationMs = _data["runDurationMs"];
+        }
+    }
+
+    static fromJS(data: any): ScriptStatusDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptStatusDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        data["name"] = this.name;
+        data["status"] = this.status;
+        data["runDurationMs"] = this.runDurationMs;
+        return data;
+    }
+
+    clone(): ScriptStatusDto {
+        const json = this.toJSON();
+        let result = new ScriptStatusDto();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptStatusDto {
+    scriptId: string;
+    name: string;
+    status: ScriptStatus;
+    runDurationMs?: number | undefined;
 }
 
 /** Application-wide settings. */
@@ -6082,20 +7553,21 @@ export class Types implements ITypes {
     ipcMessageBatch?: IpcMessageBatch | undefined;
     errorResult?: ErrorResult | undefined;
     script?: Script | undefined;
-    htmlResultsScriptOutput?: HtmlResultsScriptOutput | undefined;
-    htmlErrorScriptOutput?: HtmlErrorScriptOutput | undefined;
-    htmlRawScriptOutput?: HtmlRawScriptOutput | undefined;
-    htmlSqlScriptOutput?: HtmlSqlScriptOutput | undefined;
+    scriptOutput?: ScriptOutput | undefined;
+    scriptOutputKind!: ScriptOutputKind;
+    scriptOutputFormat!: ScriptOutputFormat;
     settingsUpdated?: SettingsUpdatedEvent | undefined;
     appStatusMessagePublished?: AppStatusMessagePublishedEvent | undefined;
     scriptPropertyChanged?: ScriptPropertyChangedEvent | undefined;
     scriptConfigPropertyChanged?: ScriptConfigPropertyChangedEvent | undefined;
+    scriptCodeUpdatedEvent?: ScriptCodeUpdatedEvent | undefined;
     scriptOutputEmitted?: ScriptOutputEmittedEvent | undefined;
     environmentsAdded?: EnvironmentsAddedEvent | undefined;
     environmentsRemoved?: EnvironmentsRemovedEvent | undefined;
     environmentPropertyChanged?: EnvironmentPropertyChangedEvent | undefined;
     activeEnvironmentChanged?: ActiveEnvironmentChangedEvent | undefined;
     scriptDirectoryChanged?: ScriptDirectoryChangedEvent | undefined;
+    recentScriptsChangedEvent?: RecentScriptsChangedEvent | undefined;
     dataConnectionSavedEvent?: DataConnectionSavedEvent | undefined;
     dataConnectionDeletedEvent?: DataConnectionDeletedEvent | undefined;
     dataConnectionResourcesUpdatingEvent?: DataConnectionResourcesUpdatingEvent | undefined;
@@ -6103,8 +7575,11 @@ export class Types implements ITypes {
     dataConnectionResourcesUpdateFailedEvent?: DataConnectionResourcesUpdateFailedEvent | undefined;
     dataConnectionSchemaValidationStartedEvent?: DataConnectionSchemaValidationStartedEvent | undefined;
     dataConnectionSchemaValidationCompletedEvent?: DataConnectionSchemaValidationCompletedEvent | undefined;
+    databaseServerSavedEvent?: DatabaseServerSavedEvent | undefined;
+    databaseServerDeletedEvent?: DatabaseServerDeletedEvent | undefined;
     openWindowCommand?: OpenWindowCommand | undefined;
     confirmSaveCommand?: ConfirmSaveCommand | undefined;
+    confirmOpenAsDuplicateCommand?: ConfirmOpenAsDuplicateCommand | undefined;
     requestScriptSavePath?: RequestScriptSavePathCommand | undefined;
     alertUserCommand?: AlertUserCommand | undefined;
     confirmWithUserCommand?: ConfirmWithUserCommand | undefined;
@@ -6112,10 +7587,14 @@ export class Types implements ITypes {
     promptUserForInputCommand?: PromptUserForInputCommand | undefined;
     alertUserAboutMissingAppDependencies?: AlertUserAboutMissingAppDependencies | undefined;
     msSqlServerDatabaseConnection?: MsSqlServerDatabaseConnection | undefined;
+    msSqlServerDatabaseServerConnection?: MsSqlServerDatabaseServerConnection | undefined;
     postgreSqlDatabaseConnection?: PostgreSqlDatabaseConnection | undefined;
+    postgreSqlDatabaseServerConnection?: PostgreSqlDatabaseServerConnection | undefined;
     sqLiteDatabaseConnection?: SQLiteDatabaseConnection | undefined;
     mySqlDatabaseConnection?: MySqlDatabaseConnection | undefined;
+    mySqlDatabaseServerConnection?: MySqlDatabaseServerConnection | undefined;
     mariaDbDatabaseConnection?: MariaDbDatabaseConnection | undefined;
+    mariaDbDatabaseServerConnection?: MariaDbDatabaseServerConnection | undefined;
     oracleDatabaseConnection?: OracleDatabaseConnection | undefined;
 
     constructor(data?: ITypes) {
@@ -6133,20 +7612,21 @@ export class Types implements ITypes {
             this.ipcMessageBatch = _data["ipcMessageBatch"] ? IpcMessageBatch.fromJS(_data["ipcMessageBatch"]) : <any>undefined;
             this.errorResult = _data["errorResult"] ? ErrorResult.fromJS(_data["errorResult"]) : <any>undefined;
             this.script = _data["script"] ? Script.fromJS(_data["script"]) : <any>undefined;
-            this.htmlResultsScriptOutput = _data["htmlResultsScriptOutput"] ? HtmlResultsScriptOutput.fromJS(_data["htmlResultsScriptOutput"]) : <any>undefined;
-            this.htmlErrorScriptOutput = _data["htmlErrorScriptOutput"] ? HtmlErrorScriptOutput.fromJS(_data["htmlErrorScriptOutput"]) : <any>undefined;
-            this.htmlRawScriptOutput = _data["htmlRawScriptOutput"] ? HtmlRawScriptOutput.fromJS(_data["htmlRawScriptOutput"]) : <any>undefined;
-            this.htmlSqlScriptOutput = _data["htmlSqlScriptOutput"] ? HtmlSqlScriptOutput.fromJS(_data["htmlSqlScriptOutput"]) : <any>undefined;
+            this.scriptOutput = _data["scriptOutput"] ? ScriptOutput.fromJS(_data["scriptOutput"]) : <any>undefined;
+            this.scriptOutputKind = _data["scriptOutputKind"];
+            this.scriptOutputFormat = _data["scriptOutputFormat"];
             this.settingsUpdated = _data["settingsUpdated"] ? SettingsUpdatedEvent.fromJS(_data["settingsUpdated"]) : <any>undefined;
             this.appStatusMessagePublished = _data["appStatusMessagePublished"] ? AppStatusMessagePublishedEvent.fromJS(_data["appStatusMessagePublished"]) : <any>undefined;
             this.scriptPropertyChanged = _data["scriptPropertyChanged"] ? ScriptPropertyChangedEvent.fromJS(_data["scriptPropertyChanged"]) : <any>undefined;
             this.scriptConfigPropertyChanged = _data["scriptConfigPropertyChanged"] ? ScriptConfigPropertyChangedEvent.fromJS(_data["scriptConfigPropertyChanged"]) : <any>undefined;
+            this.scriptCodeUpdatedEvent = _data["scriptCodeUpdatedEvent"] ? ScriptCodeUpdatedEvent.fromJS(_data["scriptCodeUpdatedEvent"]) : <any>undefined;
             this.scriptOutputEmitted = _data["scriptOutputEmitted"] ? ScriptOutputEmittedEvent.fromJS(_data["scriptOutputEmitted"]) : <any>undefined;
             this.environmentsAdded = _data["environmentsAdded"] ? EnvironmentsAddedEvent.fromJS(_data["environmentsAdded"]) : <any>undefined;
             this.environmentsRemoved = _data["environmentsRemoved"] ? EnvironmentsRemovedEvent.fromJS(_data["environmentsRemoved"]) : <any>undefined;
             this.environmentPropertyChanged = _data["environmentPropertyChanged"] ? EnvironmentPropertyChangedEvent.fromJS(_data["environmentPropertyChanged"]) : <any>undefined;
             this.activeEnvironmentChanged = _data["activeEnvironmentChanged"] ? ActiveEnvironmentChangedEvent.fromJS(_data["activeEnvironmentChanged"]) : <any>undefined;
             this.scriptDirectoryChanged = _data["scriptDirectoryChanged"] ? ScriptDirectoryChangedEvent.fromJS(_data["scriptDirectoryChanged"]) : <any>undefined;
+            this.recentScriptsChangedEvent = _data["recentScriptsChangedEvent"] ? RecentScriptsChangedEvent.fromJS(_data["recentScriptsChangedEvent"]) : <any>undefined;
             this.dataConnectionSavedEvent = _data["dataConnectionSavedEvent"] ? DataConnectionSavedEvent.fromJS(_data["dataConnectionSavedEvent"]) : <any>undefined;
             this.dataConnectionDeletedEvent = _data["dataConnectionDeletedEvent"] ? DataConnectionDeletedEvent.fromJS(_data["dataConnectionDeletedEvent"]) : <any>undefined;
             this.dataConnectionResourcesUpdatingEvent = _data["dataConnectionResourcesUpdatingEvent"] ? DataConnectionResourcesUpdatingEvent.fromJS(_data["dataConnectionResourcesUpdatingEvent"]) : <any>undefined;
@@ -6154,8 +7634,11 @@ export class Types implements ITypes {
             this.dataConnectionResourcesUpdateFailedEvent = _data["dataConnectionResourcesUpdateFailedEvent"] ? DataConnectionResourcesUpdateFailedEvent.fromJS(_data["dataConnectionResourcesUpdateFailedEvent"]) : <any>undefined;
             this.dataConnectionSchemaValidationStartedEvent = _data["dataConnectionSchemaValidationStartedEvent"] ? DataConnectionSchemaValidationStartedEvent.fromJS(_data["dataConnectionSchemaValidationStartedEvent"]) : <any>undefined;
             this.dataConnectionSchemaValidationCompletedEvent = _data["dataConnectionSchemaValidationCompletedEvent"] ? DataConnectionSchemaValidationCompletedEvent.fromJS(_data["dataConnectionSchemaValidationCompletedEvent"]) : <any>undefined;
+            this.databaseServerSavedEvent = _data["databaseServerSavedEvent"] ? DatabaseServerSavedEvent.fromJS(_data["databaseServerSavedEvent"]) : <any>undefined;
+            this.databaseServerDeletedEvent = _data["databaseServerDeletedEvent"] ? DatabaseServerDeletedEvent.fromJS(_data["databaseServerDeletedEvent"]) : <any>undefined;
             this.openWindowCommand = _data["openWindowCommand"] ? OpenWindowCommand.fromJS(_data["openWindowCommand"]) : <any>undefined;
             this.confirmSaveCommand = _data["confirmSaveCommand"] ? ConfirmSaveCommand.fromJS(_data["confirmSaveCommand"]) : <any>undefined;
+            this.confirmOpenAsDuplicateCommand = _data["confirmOpenAsDuplicateCommand"] ? ConfirmOpenAsDuplicateCommand.fromJS(_data["confirmOpenAsDuplicateCommand"]) : <any>undefined;
             this.requestScriptSavePath = _data["requestScriptSavePath"] ? RequestScriptSavePathCommand.fromJS(_data["requestScriptSavePath"]) : <any>undefined;
             this.alertUserCommand = _data["alertUserCommand"] ? AlertUserCommand.fromJS(_data["alertUserCommand"]) : <any>undefined;
             this.confirmWithUserCommand = _data["confirmWithUserCommand"] ? ConfirmWithUserCommand.fromJS(_data["confirmWithUserCommand"]) : <any>undefined;
@@ -6163,10 +7646,14 @@ export class Types implements ITypes {
             this.promptUserForInputCommand = _data["promptUserForInputCommand"] ? PromptUserForInputCommand.fromJS(_data["promptUserForInputCommand"]) : <any>undefined;
             this.alertUserAboutMissingAppDependencies = _data["alertUserAboutMissingAppDependencies"] ? AlertUserAboutMissingAppDependencies.fromJS(_data["alertUserAboutMissingAppDependencies"]) : <any>undefined;
             this.msSqlServerDatabaseConnection = _data["msSqlServerDatabaseConnection"] ? MsSqlServerDatabaseConnection.fromJS(_data["msSqlServerDatabaseConnection"]) : <any>undefined;
+            this.msSqlServerDatabaseServerConnection = _data["msSqlServerDatabaseServerConnection"] ? MsSqlServerDatabaseServerConnection.fromJS(_data["msSqlServerDatabaseServerConnection"]) : <any>undefined;
             this.postgreSqlDatabaseConnection = _data["postgreSqlDatabaseConnection"] ? PostgreSqlDatabaseConnection.fromJS(_data["postgreSqlDatabaseConnection"]) : <any>undefined;
+            this.postgreSqlDatabaseServerConnection = _data["postgreSqlDatabaseServerConnection"] ? PostgreSqlDatabaseServerConnection.fromJS(_data["postgreSqlDatabaseServerConnection"]) : <any>undefined;
             this.sqLiteDatabaseConnection = _data["sqLiteDatabaseConnection"] ? SQLiteDatabaseConnection.fromJS(_data["sqLiteDatabaseConnection"]) : <any>undefined;
             this.mySqlDatabaseConnection = _data["mySqlDatabaseConnection"] ? MySqlDatabaseConnection.fromJS(_data["mySqlDatabaseConnection"]) : <any>undefined;
+            this.mySqlDatabaseServerConnection = _data["mySqlDatabaseServerConnection"] ? MySqlDatabaseServerConnection.fromJS(_data["mySqlDatabaseServerConnection"]) : <any>undefined;
             this.mariaDbDatabaseConnection = _data["mariaDbDatabaseConnection"] ? MariaDbDatabaseConnection.fromJS(_data["mariaDbDatabaseConnection"]) : <any>undefined;
+            this.mariaDbDatabaseServerConnection = _data["mariaDbDatabaseServerConnection"] ? MariaDbDatabaseServerConnection.fromJS(_data["mariaDbDatabaseServerConnection"]) : <any>undefined;
             this.oracleDatabaseConnection = _data["oracleDatabaseConnection"] ? OracleDatabaseConnection.fromJS(_data["oracleDatabaseConnection"]) : <any>undefined;
         }
     }
@@ -6184,20 +7671,21 @@ export class Types implements ITypes {
         data["ipcMessageBatch"] = this.ipcMessageBatch ? this.ipcMessageBatch.toJSON() : <any>undefined;
         data["errorResult"] = this.errorResult ? this.errorResult.toJSON() : <any>undefined;
         data["script"] = this.script ? this.script.toJSON() : <any>undefined;
-        data["htmlResultsScriptOutput"] = this.htmlResultsScriptOutput ? this.htmlResultsScriptOutput.toJSON() : <any>undefined;
-        data["htmlErrorScriptOutput"] = this.htmlErrorScriptOutput ? this.htmlErrorScriptOutput.toJSON() : <any>undefined;
-        data["htmlRawScriptOutput"] = this.htmlRawScriptOutput ? this.htmlRawScriptOutput.toJSON() : <any>undefined;
-        data["htmlSqlScriptOutput"] = this.htmlSqlScriptOutput ? this.htmlSqlScriptOutput.toJSON() : <any>undefined;
+        data["scriptOutput"] = this.scriptOutput ? this.scriptOutput.toJSON() : <any>undefined;
+        data["scriptOutputKind"] = this.scriptOutputKind;
+        data["scriptOutputFormat"] = this.scriptOutputFormat;
         data["settingsUpdated"] = this.settingsUpdated ? this.settingsUpdated.toJSON() : <any>undefined;
         data["appStatusMessagePublished"] = this.appStatusMessagePublished ? this.appStatusMessagePublished.toJSON() : <any>undefined;
         data["scriptPropertyChanged"] = this.scriptPropertyChanged ? this.scriptPropertyChanged.toJSON() : <any>undefined;
         data["scriptConfigPropertyChanged"] = this.scriptConfigPropertyChanged ? this.scriptConfigPropertyChanged.toJSON() : <any>undefined;
+        data["scriptCodeUpdatedEvent"] = this.scriptCodeUpdatedEvent ? this.scriptCodeUpdatedEvent.toJSON() : <any>undefined;
         data["scriptOutputEmitted"] = this.scriptOutputEmitted ? this.scriptOutputEmitted.toJSON() : <any>undefined;
         data["environmentsAdded"] = this.environmentsAdded ? this.environmentsAdded.toJSON() : <any>undefined;
         data["environmentsRemoved"] = this.environmentsRemoved ? this.environmentsRemoved.toJSON() : <any>undefined;
         data["environmentPropertyChanged"] = this.environmentPropertyChanged ? this.environmentPropertyChanged.toJSON() : <any>undefined;
         data["activeEnvironmentChanged"] = this.activeEnvironmentChanged ? this.activeEnvironmentChanged.toJSON() : <any>undefined;
         data["scriptDirectoryChanged"] = this.scriptDirectoryChanged ? this.scriptDirectoryChanged.toJSON() : <any>undefined;
+        data["recentScriptsChangedEvent"] = this.recentScriptsChangedEvent ? this.recentScriptsChangedEvent.toJSON() : <any>undefined;
         data["dataConnectionSavedEvent"] = this.dataConnectionSavedEvent ? this.dataConnectionSavedEvent.toJSON() : <any>undefined;
         data["dataConnectionDeletedEvent"] = this.dataConnectionDeletedEvent ? this.dataConnectionDeletedEvent.toJSON() : <any>undefined;
         data["dataConnectionResourcesUpdatingEvent"] = this.dataConnectionResourcesUpdatingEvent ? this.dataConnectionResourcesUpdatingEvent.toJSON() : <any>undefined;
@@ -6205,8 +7693,11 @@ export class Types implements ITypes {
         data["dataConnectionResourcesUpdateFailedEvent"] = this.dataConnectionResourcesUpdateFailedEvent ? this.dataConnectionResourcesUpdateFailedEvent.toJSON() : <any>undefined;
         data["dataConnectionSchemaValidationStartedEvent"] = this.dataConnectionSchemaValidationStartedEvent ? this.dataConnectionSchemaValidationStartedEvent.toJSON() : <any>undefined;
         data["dataConnectionSchemaValidationCompletedEvent"] = this.dataConnectionSchemaValidationCompletedEvent ? this.dataConnectionSchemaValidationCompletedEvent.toJSON() : <any>undefined;
+        data["databaseServerSavedEvent"] = this.databaseServerSavedEvent ? this.databaseServerSavedEvent.toJSON() : <any>undefined;
+        data["databaseServerDeletedEvent"] = this.databaseServerDeletedEvent ? this.databaseServerDeletedEvent.toJSON() : <any>undefined;
         data["openWindowCommand"] = this.openWindowCommand ? this.openWindowCommand.toJSON() : <any>undefined;
         data["confirmSaveCommand"] = this.confirmSaveCommand ? this.confirmSaveCommand.toJSON() : <any>undefined;
+        data["confirmOpenAsDuplicateCommand"] = this.confirmOpenAsDuplicateCommand ? this.confirmOpenAsDuplicateCommand.toJSON() : <any>undefined;
         data["requestScriptSavePath"] = this.requestScriptSavePath ? this.requestScriptSavePath.toJSON() : <any>undefined;
         data["alertUserCommand"] = this.alertUserCommand ? this.alertUserCommand.toJSON() : <any>undefined;
         data["confirmWithUserCommand"] = this.confirmWithUserCommand ? this.confirmWithUserCommand.toJSON() : <any>undefined;
@@ -6214,10 +7705,14 @@ export class Types implements ITypes {
         data["promptUserForInputCommand"] = this.promptUserForInputCommand ? this.promptUserForInputCommand.toJSON() : <any>undefined;
         data["alertUserAboutMissingAppDependencies"] = this.alertUserAboutMissingAppDependencies ? this.alertUserAboutMissingAppDependencies.toJSON() : <any>undefined;
         data["msSqlServerDatabaseConnection"] = this.msSqlServerDatabaseConnection ? this.msSqlServerDatabaseConnection.toJSON() : <any>undefined;
+        data["msSqlServerDatabaseServerConnection"] = this.msSqlServerDatabaseServerConnection ? this.msSqlServerDatabaseServerConnection.toJSON() : <any>undefined;
         data["postgreSqlDatabaseConnection"] = this.postgreSqlDatabaseConnection ? this.postgreSqlDatabaseConnection.toJSON() : <any>undefined;
+        data["postgreSqlDatabaseServerConnection"] = this.postgreSqlDatabaseServerConnection ? this.postgreSqlDatabaseServerConnection.toJSON() : <any>undefined;
         data["sqLiteDatabaseConnection"] = this.sqLiteDatabaseConnection ? this.sqLiteDatabaseConnection.toJSON() : <any>undefined;
         data["mySqlDatabaseConnection"] = this.mySqlDatabaseConnection ? this.mySqlDatabaseConnection.toJSON() : <any>undefined;
+        data["mySqlDatabaseServerConnection"] = this.mySqlDatabaseServerConnection ? this.mySqlDatabaseServerConnection.toJSON() : <any>undefined;
         data["mariaDbDatabaseConnection"] = this.mariaDbDatabaseConnection ? this.mariaDbDatabaseConnection.toJSON() : <any>undefined;
+        data["mariaDbDatabaseServerConnection"] = this.mariaDbDatabaseServerConnection ? this.mariaDbDatabaseServerConnection.toJSON() : <any>undefined;
         data["oracleDatabaseConnection"] = this.oracleDatabaseConnection ? this.oracleDatabaseConnection.toJSON() : <any>undefined;
         return data;
     }
@@ -6235,20 +7730,21 @@ export interface ITypes {
     ipcMessageBatch?: IpcMessageBatch | undefined;
     errorResult?: ErrorResult | undefined;
     script?: Script | undefined;
-    htmlResultsScriptOutput?: HtmlResultsScriptOutput | undefined;
-    htmlErrorScriptOutput?: HtmlErrorScriptOutput | undefined;
-    htmlRawScriptOutput?: HtmlRawScriptOutput | undefined;
-    htmlSqlScriptOutput?: HtmlSqlScriptOutput | undefined;
+    scriptOutput?: ScriptOutput | undefined;
+    scriptOutputKind: ScriptOutputKind;
+    scriptOutputFormat: ScriptOutputFormat;
     settingsUpdated?: SettingsUpdatedEvent | undefined;
     appStatusMessagePublished?: AppStatusMessagePublishedEvent | undefined;
     scriptPropertyChanged?: ScriptPropertyChangedEvent | undefined;
     scriptConfigPropertyChanged?: ScriptConfigPropertyChangedEvent | undefined;
+    scriptCodeUpdatedEvent?: ScriptCodeUpdatedEvent | undefined;
     scriptOutputEmitted?: ScriptOutputEmittedEvent | undefined;
     environmentsAdded?: EnvironmentsAddedEvent | undefined;
     environmentsRemoved?: EnvironmentsRemovedEvent | undefined;
     environmentPropertyChanged?: EnvironmentPropertyChangedEvent | undefined;
     activeEnvironmentChanged?: ActiveEnvironmentChangedEvent | undefined;
     scriptDirectoryChanged?: ScriptDirectoryChangedEvent | undefined;
+    recentScriptsChangedEvent?: RecentScriptsChangedEvent | undefined;
     dataConnectionSavedEvent?: DataConnectionSavedEvent | undefined;
     dataConnectionDeletedEvent?: DataConnectionDeletedEvent | undefined;
     dataConnectionResourcesUpdatingEvent?: DataConnectionResourcesUpdatingEvent | undefined;
@@ -6256,8 +7752,11 @@ export interface ITypes {
     dataConnectionResourcesUpdateFailedEvent?: DataConnectionResourcesUpdateFailedEvent | undefined;
     dataConnectionSchemaValidationStartedEvent?: DataConnectionSchemaValidationStartedEvent | undefined;
     dataConnectionSchemaValidationCompletedEvent?: DataConnectionSchemaValidationCompletedEvent | undefined;
+    databaseServerSavedEvent?: DatabaseServerSavedEvent | undefined;
+    databaseServerDeletedEvent?: DatabaseServerDeletedEvent | undefined;
     openWindowCommand?: OpenWindowCommand | undefined;
     confirmSaveCommand?: ConfirmSaveCommand | undefined;
+    confirmOpenAsDuplicateCommand?: ConfirmOpenAsDuplicateCommand | undefined;
     requestScriptSavePath?: RequestScriptSavePathCommand | undefined;
     alertUserCommand?: AlertUserCommand | undefined;
     confirmWithUserCommand?: ConfirmWithUserCommand | undefined;
@@ -6265,10 +7764,14 @@ export interface ITypes {
     promptUserForInputCommand?: PromptUserForInputCommand | undefined;
     alertUserAboutMissingAppDependencies?: AlertUserAboutMissingAppDependencies | undefined;
     msSqlServerDatabaseConnection?: MsSqlServerDatabaseConnection | undefined;
+    msSqlServerDatabaseServerConnection?: MsSqlServerDatabaseServerConnection | undefined;
     postgreSqlDatabaseConnection?: PostgreSqlDatabaseConnection | undefined;
+    postgreSqlDatabaseServerConnection?: PostgreSqlDatabaseServerConnection | undefined;
     sqLiteDatabaseConnection?: SQLiteDatabaseConnection | undefined;
     mySqlDatabaseConnection?: MySqlDatabaseConnection | undefined;
+    mySqlDatabaseServerConnection?: MySqlDatabaseServerConnection | undefined;
     mariaDbDatabaseConnection?: MariaDbDatabaseConnection | undefined;
+    mariaDbDatabaseServerConnection?: MariaDbDatabaseServerConnection | undefined;
     oracleDatabaseConnection?: OracleDatabaseConnection | undefined;
 }
 
@@ -6422,235 +7925,6 @@ export interface IErrorResult {
     details?: string | undefined;
 }
 
-/** A base class for all script output */
-export abstract class ScriptOutput implements IScriptOutput {
-    /** The body of the output. */
-    body?: any | undefined;
-    /** The order this output was emitted. A value of 0 indicates no order. */
-    order!: number;
-
-    constructor(data?: IScriptOutput) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.body = _data["body"];
-            this.order = _data["order"];
-        }
-    }
-
-    static fromJS(data: any): ScriptOutput {
-        data = typeof data === 'object' ? data : {};
-        throw new Error("The abstract class 'ScriptOutput' cannot be instantiated.");
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["body"] = this.body;
-        data["order"] = this.order;
-        return data;
-    }
-
-    clone(): ScriptOutput {
-        throw new Error("The abstract class 'ScriptOutput' cannot be instantiated.");
-    }
-}
-
-/** A base class for all script output */
-export interface IScriptOutput {
-    /** The body of the output. */
-    body?: any | undefined;
-    /** The order this output was emitted. A value of 0 indicates no order. */
-    order: number;
-}
-
-/** A base class for script output with an HTML-formatted string as the body. */
-export abstract class HtmlScriptOutput extends ScriptOutput implements IHtmlScriptOutput {
-    body?: string | undefined;
-
-    constructor(data?: IHtmlScriptOutput) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-        if (_data) {
-            this.body = _data["body"];
-        }
-    }
-
-    static override fromJS(data: any): HtmlScriptOutput {
-        data = typeof data === 'object' ? data : {};
-        throw new Error("The abstract class 'HtmlScriptOutput' cannot be instantiated.");
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["body"] = this.body;
-        super.toJSON(data);
-        return data;
-    }
-
-    clone(): HtmlScriptOutput {
-        throw new Error("The abstract class 'HtmlScriptOutput' cannot be instantiated.");
-    }
-}
-
-/** A base class for script output with an HTML-formatted string as the body. */
-export interface IHtmlScriptOutput extends IScriptOutput {
-    body?: string | undefined;
-}
-
-/** Results script output represented as HTML. */
-export class HtmlResultsScriptOutput extends HtmlScriptOutput implements IHtmlResultsScriptOutput {
-
-    constructor(data?: IHtmlResultsScriptOutput) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-    }
-
-    static override fromJS(data: any): HtmlResultsScriptOutput {
-        data = typeof data === 'object' ? data : {};
-        let result = new HtmlResultsScriptOutput();
-        result.init(data);
-        return result;
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        super.toJSON(data);
-        return data;
-    }
-
-    clone(): HtmlResultsScriptOutput {
-        const json = this.toJSON();
-        let result = new HtmlResultsScriptOutput();
-        result.init(json);
-        return result;
-    }
-}
-
-/** Results script output represented as HTML. */
-export interface IHtmlResultsScriptOutput extends IHtmlScriptOutput {
-}
-
-/** Error script output represented as HTML. */
-export class HtmlErrorScriptOutput extends HtmlScriptOutput implements IHtmlErrorScriptOutput {
-
-    constructor(data?: IHtmlErrorScriptOutput) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-    }
-
-    static override fromJS(data: any): HtmlErrorScriptOutput {
-        data = typeof data === 'object' ? data : {};
-        let result = new HtmlErrorScriptOutput();
-        result.init(data);
-        return result;
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        super.toJSON(data);
-        return data;
-    }
-
-    clone(): HtmlErrorScriptOutput {
-        const json = this.toJSON();
-        let result = new HtmlErrorScriptOutput();
-        result.init(json);
-        return result;
-    }
-}
-
-/** Error script output represented as HTML. */
-export interface IHtmlErrorScriptOutput extends IHtmlScriptOutput {
-}
-
-/** Raw script output represented as HTML. */
-export class HtmlRawScriptOutput extends HtmlScriptOutput implements IHtmlRawScriptOutput {
-
-    constructor(data?: IHtmlRawScriptOutput) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-    }
-
-    static override fromJS(data: any): HtmlRawScriptOutput {
-        data = typeof data === 'object' ? data : {};
-        let result = new HtmlRawScriptOutput();
-        result.init(data);
-        return result;
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        super.toJSON(data);
-        return data;
-    }
-
-    clone(): HtmlRawScriptOutput {
-        const json = this.toJSON();
-        let result = new HtmlRawScriptOutput();
-        result.init(json);
-        return result;
-    }
-}
-
-/** Raw script output represented as HTML. */
-export interface IHtmlRawScriptOutput extends IHtmlScriptOutput {
-}
-
-/** SQL script output represented as HTML. */
-export class HtmlSqlScriptOutput extends HtmlScriptOutput implements IHtmlSqlScriptOutput {
-
-    constructor(data?: IHtmlSqlScriptOutput) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-    }
-
-    static override fromJS(data: any): HtmlSqlScriptOutput {
-        data = typeof data === 'object' ? data : {};
-        let result = new HtmlSqlScriptOutput();
-        result.init(data);
-        return result;
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        super.toJSON(data);
-        return data;
-    }
-
-    clone(): HtmlSqlScriptOutput {
-        const json = this.toJSON();
-        let result = new HtmlSqlScriptOutput();
-        result.init(json);
-        return result;
-    }
-}
-
-/** SQL script output represented as HTML. */
-export interface IHtmlSqlScriptOutput extends IHtmlScriptOutput {
-}
-
 export class SettingsUpdatedEvent implements ISettingsUpdatedEvent {
     settings!: Settings;
 
@@ -6749,10 +8023,10 @@ export class AppStatusMessage implements IAppStatusMessage {
     scriptId?: string | undefined;
     /** The text of this message. */
     text!: string;
-    /** The priority of this message. */
-    priority!: AppStatusMessagePriority;
-    /** Whether this status message should be persistant or if it should be cleared after a timeout. */
-    persistant!: boolean;
+    /** The semantic kind of this message. See AppStatusMessageKind. */
+    kind!: AppStatusMessageKind;
+    /** The severity of this message. See AppStatusMessageSeverity. */
+    severity!: AppStatusMessageSeverity;
     /** The date and time when this message was created. */
     createdDate!: Date;
 
@@ -6769,8 +8043,8 @@ export class AppStatusMessage implements IAppStatusMessage {
         if (_data) {
             this.scriptId = _data["scriptId"];
             this.text = _data["text"];
-            this.priority = _data["priority"];
-            this.persistant = _data["persistant"];
+            this.kind = _data["kind"];
+            this.severity = _data["severity"];
             this.createdDate = _data["createdDate"] ? new Date(_data["createdDate"].toString()) : <any>undefined;
         }
     }
@@ -6786,8 +8060,8 @@ export class AppStatusMessage implements IAppStatusMessage {
         data = typeof data === 'object' ? data : {};
         data["scriptId"] = this.scriptId;
         data["text"] = this.text;
-        data["priority"] = this.priority;
-        data["persistant"] = this.persistant;
+        data["kind"] = this.kind;
+        data["severity"] = this.severity;
         data["createdDate"] = this.createdDate ? this.createdDate.toISOString() : <any>undefined;
         return data;
     }
@@ -6806,15 +8080,19 @@ export interface IAppStatusMessage {
     scriptId?: string | undefined;
     /** The text of this message. */
     text: string;
-    /** The priority of this message. */
-    priority: AppStatusMessagePriority;
-    /** Whether this status message should be persistant or if it should be cleared after a timeout. */
-    persistant: boolean;
+    /** The semantic kind of this message. See AppStatusMessageKind. */
+    kind: AppStatusMessageKind;
+    /** The severity of this message. See AppStatusMessageSeverity. */
+    severity: AppStatusMessageSeverity;
     /** The date and time when this message was created. */
     createdDate: Date;
 }
 
-export type AppStatusMessagePriority = "Normal" | "High";
+/** The semantic kind of an AppStatusMessage: how long the message stays relevant and how much attention it demands. The UI derives how a message is surfaced from its kind. */
+export type AppStatusMessageKind = "Transient" | "Notice" | "Alert";
+
+/** The severity of an AppStatusMessage. */
+export type AppStatusMessageSeverity = "Info" | "Success" | "Warning" | "Error";
 
 export abstract class PropertyChangedEvent implements IPropertyChangedEvent {
     propertyName!: string;
@@ -6942,12 +8220,14 @@ export interface IScriptConfigPropertyChangedEvent extends IPropertyChangedEvent
     scriptId: string;
 }
 
-export class ScriptOutputEmittedEvent implements IScriptOutputEmittedEvent {
+export class ScriptCodeUpdatedEvent implements IScriptCodeUpdatedEvent {
     scriptId!: string;
-    output!: ScriptOutput;
-    outputType!: string;
+    newCode?: string | undefined;
+    /** Indicates whether the code change was initiated by an external source (e.g. MCP, API)
+rather than the frontend editor. Used to determine whether to forward the event to IPC clients. */
+    externallyInitiated!: boolean;
 
-    constructor(data?: IScriptOutputEmittedEvent) {
+    constructor(data?: IScriptCodeUpdatedEvent) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -6959,8 +8239,62 @@ export class ScriptOutputEmittedEvent implements IScriptOutputEmittedEvent {
     init(_data?: any) {
         if (_data) {
             this.scriptId = _data["scriptId"];
-            this.output = _data["output"] ? ScriptOutput.fromJS(_data["output"]) : <any>undefined;
-            this.outputType = _data["outputType"];
+            this.newCode = _data["newCode"];
+            this.externallyInitiated = _data["externallyInitiated"];
+        }
+    }
+
+    static fromJS(data: any): ScriptCodeUpdatedEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptCodeUpdatedEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        data["newCode"] = this.newCode;
+        data["externallyInitiated"] = this.externallyInitiated;
+        return data;
+    }
+
+    clone(): ScriptCodeUpdatedEvent {
+        const json = this.toJSON();
+        let result = new ScriptCodeUpdatedEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptCodeUpdatedEvent {
+    scriptId: string;
+    newCode?: string | undefined;
+    /** Indicates whether the code change was initiated by an external source (e.g. MCP, API)
+rather than the frontend editor. Used to determine whether to forward the event to IPC clients. */
+    externallyInitiated: boolean;
+}
+
+export class ScriptOutputEmittedEvent implements IScriptOutputEmittedEvent {
+    scriptId!: string;
+    output!: ScriptOutput;
+
+    constructor(data?: IScriptOutputEmittedEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.output = new ScriptOutput();
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            this.output = _data["output"] ? ScriptOutput.fromJS(_data["output"]) : new ScriptOutput();
         }
     }
 
@@ -6975,7 +8309,6 @@ export class ScriptOutputEmittedEvent implements IScriptOutputEmittedEvent {
         data = typeof data === 'object' ? data : {};
         data["scriptId"] = this.scriptId;
         data["output"] = this.output ? this.output.toJSON() : <any>undefined;
-        data["outputType"] = this.outputType;
         return data;
     }
 
@@ -6990,7 +8323,6 @@ export class ScriptOutputEmittedEvent implements IScriptOutputEmittedEvent {
 export interface IScriptOutputEmittedEvent {
     scriptId: string;
     output: ScriptOutput;
-    outputType: string;
 }
 
 export class EnvironmentsAddedEvent implements IEnvironmentsAddedEvent {
@@ -7236,6 +8568,60 @@ export class ScriptDirectoryChangedEvent implements IScriptDirectoryChangedEvent
 
 export interface IScriptDirectoryChangedEvent {
     scripts: ScriptSummary[];
+}
+
+export class RecentScriptsChangedEvent implements IRecentScriptsChangedEvent {
+    recentScripts!: string[];
+
+    constructor(data?: IRecentScriptsChangedEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.recentScripts = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["recentScripts"])) {
+                this.recentScripts = [] as any;
+                for (let item of _data["recentScripts"])
+                    this.recentScripts!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): RecentScriptsChangedEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new RecentScriptsChangedEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.recentScripts)) {
+            data["recentScripts"] = [];
+            for (let item of this.recentScripts)
+                data["recentScripts"].push(item);
+        }
+        return data;
+    }
+
+    clone(): RecentScriptsChangedEvent {
+        const json = this.toJSON();
+        let result = new RecentScriptsChangedEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IRecentScriptsChangedEvent {
+    recentScripts: string[];
 }
 
 export class DataConnectionSavedEvent implements IDataConnectionSavedEvent {
@@ -7555,8 +8941,94 @@ export interface IDataConnectionSchemaValidationCompletedEvent {
     dataConnectionId: string;
 }
 
+export class DatabaseServerSavedEvent implements IDatabaseServerSavedEvent {
+    server!: DatabaseServerConnection;
+
+    constructor(data?: IDatabaseServerSavedEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.server = _data["server"] ? DatabaseServerConnection.fromJS(_data["server"]) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): DatabaseServerSavedEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new DatabaseServerSavedEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["server"] = this.server ? this.server.toJSON() : <any>undefined;
+        return data;
+    }
+
+    clone(): DatabaseServerSavedEvent {
+        const json = this.toJSON();
+        let result = new DatabaseServerSavedEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IDatabaseServerSavedEvent {
+    server: DatabaseServerConnection;
+}
+
+export class DatabaseServerDeletedEvent implements IDatabaseServerDeletedEvent {
+    server!: DatabaseServerConnection;
+
+    constructor(data?: IDatabaseServerDeletedEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.server = _data["server"] ? DatabaseServerConnection.fromJS(_data["server"]) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): DatabaseServerDeletedEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new DatabaseServerDeletedEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["server"] = this.server ? this.server.toJSON() : <any>undefined;
+        return data;
+    }
+
+    clone(): DatabaseServerDeletedEvent {
+        const json = this.toJSON();
+        let result = new DatabaseServerDeletedEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IDatabaseServerDeletedEvent {
+    server: DatabaseServerConnection;
+}
+
 export abstract class CommandBase implements ICommandBase {
-    id!: string;
+    requestId!: string;
 
     constructor(data?: ICommandBase) {
         if (data) {
@@ -7569,7 +9041,7 @@ export abstract class CommandBase implements ICommandBase {
 
     init(_data?: any) {
         if (_data) {
-            this.id = _data["id"];
+            this.requestId = _data["requestId"];
         }
     }
 
@@ -7580,7 +9052,7 @@ export abstract class CommandBase implements ICommandBase {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
+        data["requestId"] = this.requestId;
         return data;
     }
 
@@ -7590,7 +9062,7 @@ export abstract class CommandBase implements ICommandBase {
 }
 
 export interface ICommandBase {
-    id: string;
+    requestId: string;
 }
 
 export abstract class Command extends CommandBase implements ICommand {
@@ -7799,6 +9271,83 @@ export class ConfirmSaveCommand extends CommandOfYesNoCancel implements IConfirm
 }
 
 export interface IConfirmSaveCommand extends ICommandOfYesNoCancel {
+    message: string;
+}
+
+export abstract class CommandOfBoolean extends CommandBase implements ICommandOfBoolean {
+
+    constructor(data?: ICommandOfBoolean) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): CommandOfBoolean {
+        data = typeof data === 'object' ? data : {};
+        throw new Error("The abstract class 'CommandOfBoolean' cannot be instantiated.");
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): CommandOfBoolean {
+        throw new Error("The abstract class 'CommandOfBoolean' cannot be instantiated.");
+    }
+}
+
+export interface ICommandOfBoolean extends ICommandBase {
+}
+
+export class ConfirmOpenAsDuplicateCommand extends CommandOfBoolean implements IConfirmOpenAsDuplicateCommand {
+    newPath!: string;
+    existingPath!: string;
+    message!: string;
+
+    constructor(data?: IConfirmOpenAsDuplicateCommand) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.newPath = _data["newPath"];
+            this.existingPath = _data["existingPath"];
+            this.message = _data["message"];
+        }
+    }
+
+    static override fromJS(data: any): ConfirmOpenAsDuplicateCommand {
+        data = typeof data === 'object' ? data : {};
+        let result = new ConfirmOpenAsDuplicateCommand();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["newPath"] = this.newPath;
+        data["existingPath"] = this.existingPath;
+        data["message"] = this.message;
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): ConfirmOpenAsDuplicateCommand {
+        const json = this.toJSON();
+        let result = new ConfirmOpenAsDuplicateCommand();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IConfirmOpenAsDuplicateCommand extends ICommandOfBoolean {
+    newPath: string;
+    existingPath: string;
     message: string;
 }
 
@@ -8084,13 +9633,14 @@ export interface IAlertUserAboutMissingAppDependencies extends ICommand {
 
 /** A connection to a database. */
 export abstract class DatabaseConnection extends DataConnection implements IDatabaseConnection {
+    serverId?: string | undefined;
     host?: string | undefined;
     port?: string | undefined;
     databaseName?: string | undefined;
     userId?: string | undefined;
     password?: string | undefined;
     containsProductionData!: boolean;
-    /** A partial connection string that is used to override values in the final connection string.
+    /** A partial connection string that is used to add or override values in the final connection string.
 For example, if this value is Timeout=300:
   - When connection string is "Server=file.db;Password=123;Timeout=100" the resulting final
     connection string will be:
@@ -8108,6 +9658,7 @@ For example, if this value is Timeout=300:
     override init(_data?: any) {
         super.init(_data);
         if (_data) {
+            this.serverId = _data["serverId"];
             this.host = _data["host"];
             this.port = _data["port"];
             this.databaseName = _data["databaseName"];
@@ -8122,9 +9673,6 @@ For example, if this value is Timeout=300:
         data = typeof data === 'object' ? data : {};
         if (data["discriminator"] === "EntityFrameworkDatabaseConnection") {
             throw new Error("The abstract class 'EntityFrameworkDatabaseConnection' cannot be instantiated.");
-        }
-        if (data["discriminator"] === "EntityFrameworkRelationalDatabaseConnection") {
-            throw new Error("The abstract class 'EntityFrameworkRelationalDatabaseConnection' cannot be instantiated.");
         }
         if (data["discriminator"] === "MsSqlServerDatabaseConnection") {
             let result = new MsSqlServerDatabaseConnection();
@@ -8161,6 +9709,7 @@ For example, if this value is Timeout=300:
 
     override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["serverId"] = this.serverId;
         data["host"] = this.host;
         data["port"] = this.port;
         data["databaseName"] = this.databaseName;
@@ -8179,13 +9728,14 @@ For example, if this value is Timeout=300:
 
 /** A connection to a database. */
 export interface IDatabaseConnection extends IDataConnection {
+    serverId?: string | undefined;
     host?: string | undefined;
     port?: string | undefined;
     databaseName?: string | undefined;
     userId?: string | undefined;
     password?: string | undefined;
     containsProductionData: boolean;
-    /** A partial connection string that is used to override values in the final connection string.
+    /** A partial connection string that is used to add or override values in the final connection string.
 For example, if this value is Timeout=300:
   - When connection string is "Server=file.db;Password=123;Timeout=100" the resulting final
     connection string will be:
@@ -8215,9 +9765,6 @@ export abstract class EntityFrameworkDatabaseConnection extends DatabaseConnecti
 
     static override fromJS(data: any): EntityFrameworkDatabaseConnection {
         data = typeof data === 'object' ? data : {};
-        if (data["discriminator"] === "EntityFrameworkRelationalDatabaseConnection") {
-            throw new Error("The abstract class 'EntityFrameworkRelationalDatabaseConnection' cannot be instantiated.");
-        }
         if (data["discriminator"] === "MsSqlServerDatabaseConnection") {
             let result = new MsSqlServerDatabaseConnection();
             result.init(data);
@@ -8269,67 +9816,7 @@ export interface IEntityFrameworkDatabaseConnection extends IDatabaseConnection 
     scaffoldOptions?: ScaffoldOptions | undefined;
 }
 
-export abstract class EntityFrameworkRelationalDatabaseConnection extends EntityFrameworkDatabaseConnection implements IEntityFrameworkRelationalDatabaseConnection {
-
-    constructor(data?: IEntityFrameworkRelationalDatabaseConnection) {
-        super(data);
-        this._discriminator = "EntityFrameworkRelationalDatabaseConnection";
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-    }
-
-    static override fromJS(data: any): EntityFrameworkRelationalDatabaseConnection {
-        data = typeof data === 'object' ? data : {};
-        if (data["discriminator"] === "MsSqlServerDatabaseConnection") {
-            let result = new MsSqlServerDatabaseConnection();
-            result.init(data);
-            return result;
-        }
-        if (data["discriminator"] === "PostgreSqlDatabaseConnection") {
-            let result = new PostgreSqlDatabaseConnection();
-            result.init(data);
-            return result;
-        }
-        if (data["discriminator"] === "SQLiteDatabaseConnection") {
-            let result = new SQLiteDatabaseConnection();
-            result.init(data);
-            return result;
-        }
-        if (data["discriminator"] === "MySqlDatabaseConnection") {
-            let result = new MySqlDatabaseConnection();
-            result.init(data);
-            return result;
-        }
-        if (data["discriminator"] === "MariaDbDatabaseConnection") {
-            let result = new MariaDbDatabaseConnection();
-            result.init(data);
-            return result;
-        }
-        if (data["discriminator"] === "OracleDatabaseConnection") {
-            let result = new OracleDatabaseConnection();
-            result.init(data);
-            return result;
-        }
-        throw new Error("The abstract class 'EntityFrameworkRelationalDatabaseConnection' cannot be instantiated.");
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        super.toJSON(data);
-        return data;
-    }
-
-    clone(): EntityFrameworkRelationalDatabaseConnection {
-        throw new Error("The abstract class 'EntityFrameworkRelationalDatabaseConnection' cannot be instantiated.");
-    }
-}
-
-export interface IEntityFrameworkRelationalDatabaseConnection extends IEntityFrameworkDatabaseConnection {
-}
-
-export class MsSqlServerDatabaseConnection extends EntityFrameworkRelationalDatabaseConnection implements IMsSqlServerDatabaseConnection {
+export class MsSqlServerDatabaseConnection extends EntityFrameworkDatabaseConnection implements IMsSqlServerDatabaseConnection {
 
     constructor(data?: IMsSqlServerDatabaseConnection) {
         super(data);
@@ -8361,7 +9848,7 @@ export class MsSqlServerDatabaseConnection extends EntityFrameworkRelationalData
     }
 }
 
-export interface IMsSqlServerDatabaseConnection extends IEntityFrameworkRelationalDatabaseConnection {
+export interface IMsSqlServerDatabaseConnection extends IEntityFrameworkDatabaseConnection {
 }
 
 export class ScaffoldOptions implements IScaffoldOptions {
@@ -8443,7 +9930,98 @@ export interface IScaffoldOptions {
     optimizeDbContext: boolean;
 }
 
-export class PostgreSqlDatabaseConnection extends EntityFrameworkRelationalDatabaseConnection implements IPostgreSqlDatabaseConnection {
+export abstract class EntityFrameworkDatabaseServerConnection extends DatabaseServerConnection implements IEntityFrameworkDatabaseServerConnection {
+    scaffoldOptions?: ScaffoldOptions | undefined;
+
+    constructor(data?: IEntityFrameworkDatabaseServerConnection) {
+        super(data);
+        this._discriminator = "EntityFrameworkDatabaseServerConnection";
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.scaffoldOptions = _data["scaffoldOptions"] ? ScaffoldOptions.fromJS(_data["scaffoldOptions"]) : <any>undefined;
+        }
+    }
+
+    static override fromJS(data: any): EntityFrameworkDatabaseServerConnection {
+        data = typeof data === 'object' ? data : {};
+        if (data["discriminator"] === "MsSqlServerDatabaseServerConnection") {
+            let result = new MsSqlServerDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "PostgreSqlDatabaseServerConnection") {
+            let result = new PostgreSqlDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "MySqlDatabaseServerConnection") {
+            let result = new MySqlDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        if (data["discriminator"] === "MariaDbDatabaseServerConnection") {
+            let result = new MariaDbDatabaseServerConnection();
+            result.init(data);
+            return result;
+        }
+        throw new Error("The abstract class 'EntityFrameworkDatabaseServerConnection' cannot be instantiated.");
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scaffoldOptions"] = this.scaffoldOptions ? this.scaffoldOptions.toJSON() : <any>undefined;
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): EntityFrameworkDatabaseServerConnection {
+        throw new Error("The abstract class 'EntityFrameworkDatabaseServerConnection' cannot be instantiated.");
+    }
+}
+
+export interface IEntityFrameworkDatabaseServerConnection extends IDatabaseServerConnection {
+    scaffoldOptions?: ScaffoldOptions | undefined;
+}
+
+export class MsSqlServerDatabaseServerConnection extends EntityFrameworkDatabaseServerConnection implements IMsSqlServerDatabaseServerConnection {
+
+    constructor(data?: IMsSqlServerDatabaseServerConnection) {
+        super(data);
+        this._discriminator = "MsSqlServerDatabaseServerConnection";
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): MsSqlServerDatabaseServerConnection {
+        data = typeof data === 'object' ? data : {};
+        let result = new MsSqlServerDatabaseServerConnection();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): MsSqlServerDatabaseServerConnection {
+        const json = this.toJSON();
+        let result = new MsSqlServerDatabaseServerConnection();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IMsSqlServerDatabaseServerConnection extends IEntityFrameworkDatabaseServerConnection {
+}
+
+export class PostgreSqlDatabaseConnection extends EntityFrameworkDatabaseConnection implements IPostgreSqlDatabaseConnection {
 
     constructor(data?: IPostgreSqlDatabaseConnection) {
         super(data);
@@ -8475,10 +10053,45 @@ export class PostgreSqlDatabaseConnection extends EntityFrameworkRelationalDatab
     }
 }
 
-export interface IPostgreSqlDatabaseConnection extends IEntityFrameworkRelationalDatabaseConnection {
+export interface IPostgreSqlDatabaseConnection extends IEntityFrameworkDatabaseConnection {
 }
 
-export class SQLiteDatabaseConnection extends EntityFrameworkRelationalDatabaseConnection implements ISQLiteDatabaseConnection {
+export class PostgreSqlDatabaseServerConnection extends EntityFrameworkDatabaseServerConnection implements IPostgreSqlDatabaseServerConnection {
+
+    constructor(data?: IPostgreSqlDatabaseServerConnection) {
+        super(data);
+        this._discriminator = "PostgreSqlDatabaseServerConnection";
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): PostgreSqlDatabaseServerConnection {
+        data = typeof data === 'object' ? data : {};
+        let result = new PostgreSqlDatabaseServerConnection();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): PostgreSqlDatabaseServerConnection {
+        const json = this.toJSON();
+        let result = new PostgreSqlDatabaseServerConnection();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IPostgreSqlDatabaseServerConnection extends IEntityFrameworkDatabaseServerConnection {
+}
+
+export class SQLiteDatabaseConnection extends EntityFrameworkDatabaseConnection implements ISQLiteDatabaseConnection {
 
     constructor(data?: ISQLiteDatabaseConnection) {
         super(data);
@@ -8510,10 +10123,10 @@ export class SQLiteDatabaseConnection extends EntityFrameworkRelationalDatabaseC
     }
 }
 
-export interface ISQLiteDatabaseConnection extends IEntityFrameworkRelationalDatabaseConnection {
+export interface ISQLiteDatabaseConnection extends IEntityFrameworkDatabaseConnection {
 }
 
-export class MySqlDatabaseConnection extends EntityFrameworkRelationalDatabaseConnection implements IMySqlDatabaseConnection {
+export class MySqlDatabaseConnection extends EntityFrameworkDatabaseConnection implements IMySqlDatabaseConnection {
 
     constructor(data?: IMySqlDatabaseConnection) {
         super(data);
@@ -8545,10 +10158,45 @@ export class MySqlDatabaseConnection extends EntityFrameworkRelationalDatabaseCo
     }
 }
 
-export interface IMySqlDatabaseConnection extends IEntityFrameworkRelationalDatabaseConnection {
+export interface IMySqlDatabaseConnection extends IEntityFrameworkDatabaseConnection {
 }
 
-export class MariaDbDatabaseConnection extends EntityFrameworkRelationalDatabaseConnection implements IMariaDbDatabaseConnection {
+export class MySqlDatabaseServerConnection extends EntityFrameworkDatabaseServerConnection implements IMySqlDatabaseServerConnection {
+
+    constructor(data?: IMySqlDatabaseServerConnection) {
+        super(data);
+        this._discriminator = "MySqlDatabaseServerConnection";
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): MySqlDatabaseServerConnection {
+        data = typeof data === 'object' ? data : {};
+        let result = new MySqlDatabaseServerConnection();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): MySqlDatabaseServerConnection {
+        const json = this.toJSON();
+        let result = new MySqlDatabaseServerConnection();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IMySqlDatabaseServerConnection extends IEntityFrameworkDatabaseServerConnection {
+}
+
+export class MariaDbDatabaseConnection extends EntityFrameworkDatabaseConnection implements IMariaDbDatabaseConnection {
 
     constructor(data?: IMariaDbDatabaseConnection) {
         super(data);
@@ -8580,10 +10228,45 @@ export class MariaDbDatabaseConnection extends EntityFrameworkRelationalDatabase
     }
 }
 
-export interface IMariaDbDatabaseConnection extends IEntityFrameworkRelationalDatabaseConnection {
+export interface IMariaDbDatabaseConnection extends IEntityFrameworkDatabaseConnection {
 }
 
-export class OracleDatabaseConnection extends EntityFrameworkRelationalDatabaseConnection implements IOracleDatabaseConnection {
+export class MariaDbDatabaseServerConnection extends EntityFrameworkDatabaseServerConnection implements IMariaDbDatabaseServerConnection {
+
+    constructor(data?: IMariaDbDatabaseServerConnection) {
+        super(data);
+        this._discriminator = "MariaDbDatabaseServerConnection";
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): MariaDbDatabaseServerConnection {
+        data = typeof data === 'object' ? data : {};
+        let result = new MariaDbDatabaseServerConnection();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): MariaDbDatabaseServerConnection {
+        const json = this.toJSON();
+        let result = new MariaDbDatabaseServerConnection();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IMariaDbDatabaseServerConnection extends IEntityFrameworkDatabaseServerConnection {
+}
+
+export class OracleDatabaseConnection extends EntityFrameworkDatabaseConnection implements IOracleDatabaseConnection {
 
     constructor(data?: IOracleDatabaseConnection) {
         super(data);
@@ -8615,7 +10298,7 @@ export class OracleDatabaseConnection extends EntityFrameworkRelationalDatabaseC
     }
 }
 
-export interface IOracleDatabaseConnection extends IEntityFrameworkRelationalDatabaseConnection {
+export interface IOracleDatabaseConnection extends IEntityFrameworkDatabaseConnection {
 }
 
 export class UserSecretListingDto implements IUserSecretListingDto {

@@ -8,58 +8,54 @@ namespace NetPad.Apps.Cli.Commands;
 
 public static class CacheCommand
 {
-    public static void AddCacheCommand(this RootCommand parent, IServiceProvider serviceProvider)
+    public static void AddCacheCommand(this RootCommand parent, IServiceProvider _)
     {
-        var cacheCmd = new Command("cache", "Show information about the script build cache.");
+        var cacheCmd = new Command("cache", "Manage the script build cache.");
         parent.Subcommands.Add(cacheCmd);
-        cacheCmd.SetAction(_ => ListCachedScriptDeployments(serviceProvider));
+        cacheCmd.SetAction(_ => ListCachedScriptDeployments());
 
-        var listCmd = new Command("ls", "List all script builds.");
+        var listCmd = new Command("list", "List cached script builds.")
+        {
+            Aliases = { "ls" }
+        };
         cacheCmd.Subcommands.Add(listCmd);
-        listCmd.SetAction(_ => ListCachedScriptDeployments(serviceProvider));
+        listCmd.SetAction(_ => ListCachedScriptDeployments());
 
-        var numberToRemoveArg = new Argument<int?>("number")
+        var removeIdentifierArg = new Argument<string>("number|name")
         {
-            Description =
-                "A build number to remove. The number must correspond with the listing shown when running the 'ls' command.",
-            Arity = ArgumentArity.ZeroOrOne
+            Description = "A build number (from 'list' output) or a script name to remove."
         };
 
-        var removeAllOption = new Option<bool>("--all")
-        {
-            Description = "Remove all cached script builds.",
-            Arity = ArgumentArity.ZeroOrOne
-        };
-
-        var removeCmd = new Command("rm", "Remove a cached script build.");
+        var removeCmd = new Command("rm", "Remove a cached script build. Use 'clear' to remove all.");
         cacheCmd.Subcommands.Add(removeCmd);
-        removeCmd.Arguments.Add(numberToRemoveArg);
-        removeCmd.Options.Add(removeAllOption);
+        removeCmd.Arguments.Add(removeIdentifierArg);
         removeCmd.SetAction(p =>
         {
-            var num = p.GetValue(numberToRemoveArg);
-            var all = p.GetValue(removeAllOption);
+            var identifier = p.GetValue(removeIdentifierArg)!;
 
-            if (num.HasValue && all)
+            // Try parsing as a number first, otherwise treat as a script name
+            if (int.TryParse(identifier, out var number))
             {
-                Presenter.Error("Cannot specify --all when specifying a number to remove.");
-                return 1;
+                return RemoveCachedDeploymentByNumber(number);
             }
 
-            if (!num.HasValue && !all)
-            {
-                Presenter.Error(
-                    "Specify a number to remove (use ls to list existing cached builds), or --all to remove all.");
-                return 1;
-            }
-
-            return RemoveCachedScriptDeployments(num);
+            return RemoveCachedDeploymentByName(identifier);
         });
+
+        var clearCmd = new Command("clear", "Remove all cached script builds.");
+        cacheCmd.Subcommands.Add(clearCmd);
+        clearCmd.SetAction(_ => RemoveAllCachedDeployments());
     }
 
-    private static int ListCachedScriptDeployments(IServiceProvider serviceProvider)
+    private static int ListCachedScriptDeployments()
     {
-        var cache = new DeploymentCache(AppDataProvider.ExternalExecutionModelDeploymentCacheDirectoryPath);
+        var deployments = GetOrderedDeployments();
+
+        if (deployments.Count == 0)
+        {
+            AnsiConsole.MarkupLine("cache is empty");
+            return 0;
+        }
 
         var table = new Table
         {
@@ -75,21 +71,14 @@ public static class CacheCommand
         table.AddColumn(new TableColumn(new Markup("[bold]Last Run Result[/]")));
 
         int order = 0;
-        var deployments = cache.ListDeploymentDirectories()
-            .Select(x => new
-            {
-                Directory = x,
-                Info = x.GetDeploymentInfo()!
-            });
-
-        foreach (var deployment in deployments.OrderByDescending(x => x.Info.LastRunAt))
+        foreach (var (dir, info) in deployments)
         {
             table.AddRow(
                 new Markup($"[violet]{++order}[/]"),
-                new Markup(deployment.Info.GetScriptName()),
-                new Markup(FileSystemUtil.GetReadableFileSize(deployment.Directory.GetSize())),
-                new Markup(deployment.Info.LastRunAt?.ToString() ?? "Never"),
-                new Markup(deployment.Info.LastRunSucceeded == true ? "[green]success[/]" : "[red]fail[/]")
+                new Markup(info.GetScriptName()),
+                new Markup(FileSystemUtil.GetReadableFileSize(dir.GetSize())),
+                new Markup(info.LastRunAt?.ToString() ?? "Never"),
+                new Markup(info.LastRunSucceeded == true ? "[green]success[/]" : info.LastRunSucceeded == false ? "[red]fail[/]" : "[grey]—[/]")
             );
         }
 
@@ -98,29 +87,130 @@ public static class CacheCommand
         return 0;
     }
 
-    private static int RemoveCachedScriptDeployments(int? numberToRemove)
+    private static List<(DeploymentDirectory Directory, DeploymentInfo Info)> GetOrderedDeployments()
     {
         var cache = new DeploymentCache(AppDataProvider.ExternalExecutionModelDeploymentCacheDirectoryPath);
-        var dirs = cache.ListDeploymentDirectories().ToArray();
-        if (dirs.Length == 0)
+        return cache.ListDeploymentDirectories()
+            .Select(x => (Directory: x, Info: x.GetDeploymentInfo()))
+            .Where(x => x.Info != null)
+            .Select(x => (x.Directory, Info: x.Info!))
+            .OrderByDescending(x => x.Info.LastRunAt)
+            .ToList();
+    }
+
+    private static int RemoveAllCachedDeployments()
+    {
+        var deployments = GetOrderedDeployments();
+        if (deployments.Count == 0)
         {
             AnsiConsole.MarkupLine("cache is empty");
             return 0;
         }
 
-        bool removeAll = numberToRemove == null;
-
-        dirs = numberToRemove.HasValue
-            ? dirs.Skip(numberToRemove.Value - 1).Take(1).ToArray()
-            : dirs;
-
-        foreach (var dir in dirs)
+        var failures = new List<(string Name, string Error)>();
+        foreach (var (dir, info) in deployments)
         {
-            Try.Run(() => dir.DeleteIfExists());
+            try
+            {
+                dir.DeleteIfExists();
+            }
+            catch (Exception ex)
+            {
+                failures.Add((info.GetScriptName(), ex.Message));
+            }
         }
 
-        var message = removeAll ? "cache was emptied" : "cached build was removed";
-        AnsiConsole.MarkupLineInterpolated($"[green]success:[/] {message}");
+        if (failures.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[green]success:[/] cache was emptied");
+            return 0;
+        }
+
+        int removed = deployments.Count - failures.Count;
+        AnsiConsole.MarkupLineInterpolated(
+            $"[yellow]partial:[/] removed {removed} of {deployments.Count} cached builds");
+        foreach (var (name, error) in failures)
+        {
+            Presenter.Error($"could not remove cached build for '{name}': {error}");
+        }
+
+        return 1;
+    }
+
+    private static int RemoveCachedDeploymentByNumber(int number)
+    {
+        var deployments = GetOrderedDeployments();
+        if (deployments.Count == 0)
+        {
+            AnsiConsole.MarkupLine("cache is empty");
+            return 0;
+        }
+
+        if (number < 1 || number > deployments.Count)
+        {
+            Presenter.Error($"Invalid build number. Must be between 1 and {deployments.Count}.");
+            return 1;
+        }
+
+        var (dir, info) = deployments[number - 1];
+        return DeleteDeployment(dir, info.GetScriptName());
+    }
+
+    private static int RemoveCachedDeploymentByName(string name)
+    {
+        var deployments = GetOrderedDeployments();
+        if (deployments.Count == 0)
+        {
+            AnsiConsole.MarkupLine("cache is empty");
+            return 0;
+        }
+
+        var matches = deployments
+            .Where(x => x.Info.GetScriptName().Contains(name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            Presenter.Error($"No cached build matching '{name}' was found.");
+            return 1;
+        }
+
+        if (matches.Count > 1)
+        {
+            var exactMatch = matches
+                .Where(x => x.Info.GetScriptName().Equals(name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (exactMatch.Count == 1)
+            {
+                matches = exactMatch;
+            }
+            else
+            {
+                Presenter.Error(
+                    $"Multiple cached builds match '{name}': {string.Join(", ", matches.Select(x => x.Info.GetScriptName()))}. " +
+                    "Use an exact name or a build number.");
+                return 1;
+            }
+        }
+
+        var (dir, info) = matches[0];
+        return DeleteDeployment(dir, info.GetScriptName());
+    }
+
+    private static int DeleteDeployment(DeploymentDirectory dir, string scriptName)
+    {
+        try
+        {
+            dir.DeleteIfExists();
+        }
+        catch (Exception ex)
+        {
+            Presenter.Error($"could not remove cached build for '{scriptName}': {ex.Message}");
+            return 1;
+        }
+
+        AnsiConsole.MarkupLineInterpolated($"[green]success:[/] cached build for '{scriptName}' was removed");
         return 0;
     }
 }

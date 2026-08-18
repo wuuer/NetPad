@@ -5,6 +5,7 @@ using NetPad.Application;
 using NetPad.Apps.Configuration;
 using NetPad.Apps.Data;
 using NetPad.Apps.Scripts;
+using NetPad.Apps.Services;
 using NetPad.CodeAnalysis;
 using NetPad.Compilation;
 using NetPad.Compilation.CSharp;
@@ -47,6 +48,7 @@ public static class DependencyInjection
         services.AddSingleton<IScriptNameGenerator, DefaultScriptNameGenerator>();
         services.AddTransient<IPackageProvider, NuGetPackageProvider>();
         services.AddSingleton<ITrivialDataStore, FileSystemTrivialDataStore>();
+        services.AddSingleton<IRecentScriptsService, RecentScriptsService>();
         services.AddDataProtection(options => options.ApplicationDiscriminator = AppIdentifier.AppId);
 
         return services;
@@ -57,13 +59,13 @@ public static class DependencyInjection
     /// </summary>
     public static DataConnectionFeatureBuilder AddDataConnectionFeature(this IServiceCollection services)
     {
-        services.AddTransient<IDataConnectionRepository, FileSystemDataConnectionRepository>();
-        services.AddTransient<IDataConnectionResourcesRepository, FileSystemDataConnectionResourcesRepository>();
+        services.AddSingleton<IDataConnectionRepository, FileSystemDataConnectionRepository>();
+        services.AddSingleton<IDataConnectionResourcesRepository, FileSystemDataConnectionResourcesRepository>();
         services.AddSingleton<IDataConnectionResourcesCache, FileSystemDataConnectionResourcesCache>();
         services.AddSingleton<Lazy<IDataConnectionResourcesCache>>(sp =>
             new Lazy<IDataConnectionResourcesCache>(sp.GetRequiredService<IDataConnectionResourcesCache>()));
 
-        services.AddTransient<IDataConnectionPasswordProtector>(s =>
+        services.AddSingleton<IDataConnectionPasswordProtector>(s =>
             new DataConnectionPasswordProtector(s.GetRequiredService<IDataProtectionProvider>(), "DataConnectionPasswords"));
 
         services.AddTransient<

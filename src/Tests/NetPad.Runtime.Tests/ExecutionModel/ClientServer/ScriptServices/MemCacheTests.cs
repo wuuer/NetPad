@@ -1,5 +1,4 @@
-﻿using NetPad.ExecutionModel.ScriptServices;
-using Xunit;
+using NetPad.ExecutionModel.ScriptServices;
 
 namespace NetPad.Runtime.Tests.ExecutionModel.ClientServer.ScriptServices;
 

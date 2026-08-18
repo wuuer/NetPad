@@ -1,7 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using NetPad.Application.Events;
 using NetPad.Apps.CQs;
-using NetPad.Apps.Data.EntityFrameworkCore.DataConnections;
+using NetPad.Apps.Services;
+using NetPad.Apps.Data.EntityFrameworkCore.DataConnections.MariaDb;
+using NetPad.Apps.Data.EntityFrameworkCore.DataConnections.MsSqlServer;
+using NetPad.Apps.Data.EntityFrameworkCore.DataConnections.MySql;
+using NetPad.Apps.Data.EntityFrameworkCore.DataConnections.Oracle;
+using NetPad.Apps.Data.EntityFrameworkCore.DataConnections.PostgreSql;
+using NetPad.Apps.Data.EntityFrameworkCore.DataConnections.SQLite;
 using NetPad.Apps.UiInterop;
 using NetPad.Configuration.Events;
 using NetPad.Data.Events;
@@ -32,20 +38,21 @@ public class TypesController : ControllerBase
         public IpcMessageBatch? IpcMessageBatch { get; set; }
         public ErrorResult? ErrorResult { get; set; }
         public Script? Script { get; set; }
-        public HtmlResultsScriptOutput? HtmlResultsScriptOutput { get; set; }
-        public HtmlErrorScriptOutput? HtmlErrorScriptOutput { get; set; }
-        public HtmlRawScriptOutput? HtmlRawScriptOutput { get; set; }
-        public HtmlSqlScriptOutput? HtmlSqlScriptOutput { get; set; }
+        public ScriptOutput? ScriptOutput { get; set; }
+        public ScriptOutputKind ScriptOutputKind { get; set; }
+        public ScriptOutputFormat ScriptOutputFormat { get; set; }
         public SettingsUpdatedEvent? SettingsUpdated { get; set; }
         public AppStatusMessagePublishedEvent? AppStatusMessagePublished { get; set; }
         public ScriptPropertyChangedEvent? ScriptPropertyChanged { get; set; }
         public ScriptConfigPropertyChangedEvent? ScriptConfigPropertyChanged { get; set; }
+        public ScriptCodeUpdatedEvent? ScriptCodeUpdatedEvent { get; set; }
         public ScriptOutputEmittedEvent? ScriptOutputEmitted { get; set; }
         public EnvironmentsAddedEvent? EnvironmentsAdded { get; set; }
         public EnvironmentsRemovedEvent? EnvironmentsRemoved { get; set; }
         public EnvironmentPropertyChangedEvent? EnvironmentPropertyChanged { get; set; }
         public ActiveEnvironmentChangedEvent? ActiveEnvironmentChanged { get; set; }
         public ScriptDirectoryChangedEvent? ScriptDirectoryChanged { get; set; }
+        public RecentScriptsChangedEvent? RecentScriptsChangedEvent { get; set; }
         public DataConnectionSavedEvent? DataConnectionSavedEvent { get; set; }
         public DataConnectionDeletedEvent? DataConnectionDeletedEvent { get; set; }
         public DataConnectionResourcesUpdatingEvent? DataConnectionResourcesUpdatingEvent { get; set; }
@@ -53,8 +60,11 @@ public class TypesController : ControllerBase
         public DataConnectionResourcesUpdateFailedEvent? DataConnectionResourcesUpdateFailedEvent { get; set; }
         public DataConnectionSchemaValidationStartedEvent? DataConnectionSchemaValidationStartedEvent { get; set; }
         public DataConnectionSchemaValidationCompletedEvent? DataConnectionSchemaValidationCompletedEvent { get; set; }
+        public DatabaseServerSavedEvent? DatabaseServerSavedEvent { get; set; }
+        public DatabaseServerDeletedEvent? DatabaseServerDeletedEvent { get; set; }
         public OpenWindowCommand? OpenWindowCommand { get; set; }
         public ConfirmSaveCommand? ConfirmSaveCommand { get; set; }
+        public ConfirmOpenAsDuplicateCommand? ConfirmOpenAsDuplicateCommand { get; set; }
         public RequestScriptSavePathCommand? RequestScriptSavePath { get; set; }
         public AlertUserCommand? AlertUserCommand { get; set; }
         public ConfirmWithUserCommand? ConfirmWithUserCommand { get; set; }
@@ -62,10 +72,14 @@ public class TypesController : ControllerBase
         public PromptUserForInputCommand? PromptUserForInputCommand { get; set; }
         public AlertUserAboutMissingAppDependencies? AlertUserAboutMissingAppDependencies { get; set; }
         public MsSqlServerDatabaseConnection? MsSqlServerDatabaseConnection { get; set; }
+        public MsSqlServerDatabaseServerConnection? MsSqlServerDatabaseServerConnection { get; set; }
         public PostgreSqlDatabaseConnection? PostgreSqlDatabaseConnection { get; set; }
+        public PostgreSqlDatabaseServerConnection? PostgreSqlDatabaseServerConnection { get; set; }
         public SQLiteDatabaseConnection? SQLiteDatabaseConnection { get; set; }
         public MySqlDatabaseConnection? MySqlDatabaseConnection { get; set; }
+        public MySqlDatabaseServerConnection? MySqlDatabaseServerConnection { get; set; }
         public MariaDbDatabaseConnection? MariaDbDatabaseConnection { get; set; }
+        public MariaDbDatabaseServerConnection? MariaDbDatabaseServerConnection { get; set; }
         public OracleDatabaseConnection? OracleDatabaseConnection { get; set; }
     }
 }

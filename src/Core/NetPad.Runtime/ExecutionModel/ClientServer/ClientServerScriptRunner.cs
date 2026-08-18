@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using NetPad.Application;
 using NetPad.Compilation.Scripts;
@@ -9,7 +8,6 @@ using NetPad.DotNet;
 using NetPad.Events;
 using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.ExecutionModel.ClientServer.ScriptHost;
-using NetPad.ExecutionModel.External.Interface;
 using NetPad.IO;
 using NetPad.IO.IPC.Stdio;
 using NetPad.Presentation;
@@ -41,7 +39,7 @@ namespace NetPad.ExecutionModel.ClientServer;
 ///     c. script-host sends output back to Client (this) by emitting messages
 /// </para>
 /// </summary>
-public sealed partial class ClientServerScriptRunner : IScriptRunner
+public partial class ClientServerScriptRunner : IScriptRunner
 {
     private readonly Script _script;
     private readonly IScriptDependencyResolver _scriptDependencyResolver;
@@ -58,11 +56,16 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
     private readonly WorkingDirectory _workingDirectory;
     private readonly List<IDisposable> _subscriptions = [];
 
-    private readonly ScriptHostProcessManager _scriptHostProcessManager;
+    private readonly IScriptHostProcessManager _scriptHostProcessManager;
     private readonly object _runLock = new();
     private ScriptRun? _currentRun;
     private bool _userRequestedStop;
     private bool _restartScriptHostOnNextRun;
+
+    // Compilation and deployment caches
+    private CompilationCacheEntry? _compilationCache;
+    private string? _lastDeployedFingerprintHash;
+    private ScriptDeployState? _lastScriptDeploy;
 
     public ClientServerScriptRunner(
         Script script,
@@ -73,7 +76,7 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
         IEventBus eventBus,
         Settings settings,
         ILogger<ClientServerScriptRunner> logger,
-        ILoggerFactory loggerFactory)
+        IScriptHostProcessManagerFactory scriptHostProcessManagerFactory)
     {
         _script = script;
         _scriptDependencyResolver = scriptDependencyResolver;
@@ -112,14 +115,12 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
         });
         _rawOutputHandler = new RawOutputHandler(_combinedOutputWriter);
 
-        _scriptHostProcessManager = new ScriptHostProcessManager(
+        _scriptHostProcessManager = scriptHostProcessManagerFactory.Create(
             _script,
             _workingDirectory,
             AddScriptHostOnMessageReceivedHandlers,
             _rawOutputHandler.RawOutputReceived,
-            _rawOutputHandler.RawErrorReceived,
-            _eventBus,
-            loggerFactory
+            _rawOutputHandler.RawErrorReceived
         );
 
         _subscriptions.Add(eventBus.Subscribe<DataConnectionResourcesUpdatingEvent>(ev =>
@@ -128,6 +129,7 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
             if (_currentRun?.DataConnectionId == ev.DataConnection.Id)
             {
                 _restartScriptHostOnNextRun = true;
+                InvalidateCompilationCache();
             }
 
             return Task.CompletedTask;
@@ -156,7 +158,7 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
                 _scriptHostProcessManager.StopScriptHost();
                 _currentRun.SetResult(RunResult.RunCancelled());
                 _eventBus.PublishAsync(new ScriptMemCacheItemInfoChangedEvent(_script.Id, []));
-                _ = _appStatusMessagePublisher.PublishAsync(_script.Id, "Stopped");
+                _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Stopped");
             });
         }
 
@@ -172,10 +174,13 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
                         || _restartScriptHostOnNextRun
                         || previousRun.HasScriptChangedEnoughToRestartScriptHost(_script);
 
+                    previousRun.Dispose();
+
                     if (stopScriptHost)
                     {
                         _logger.LogDebug("Will restart script-host");
                         _scriptHostProcessManager.StopScriptHost();
+                        InvalidateDeploymentState();
                     }
                 }
 
@@ -198,14 +203,14 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
                 if (setup == null)
                 {
                     _logger.LogError("Run environment setup failed");
-                    _ = _appStatusMessagePublisher.PublishAsync(_script.Id, "Could not run script");
+                    _ = _appStatusMessagePublisher.PublishNoticeAsync(_script.Id, "Could not run script", AppStatusMessageSeverity.Error);
                     _currentRun.SetResult(RunResult.RunAttemptFailure());
                     return;
                 }
 
                 _currentRun.UserProgramStartLineNumber = setup.UserProgramStartLineNumber;
 
-                _ = _appStatusMessagePublisher.PublishAsync(_script.Id, "Running...");
+                _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Running...");
                 _scriptHostProcessManager.RunScript(
                     _currentRun.RunId,
                     _workingDirectory.SharedDependenciesDirectory,
@@ -218,15 +223,15 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
 
                 if (!result.IsRunCancelled)
                 {
-                    _ = _appStatusMessagePublisher.PublishAsync(_script.Id, "Finished");
+                    _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Finished");
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error running script");
-                await _combinedOutputWriter.WriteAsync(new ErrorScriptOutput(ex));
+                await _combinedOutputWriter.WriteAsync(new ScriptOutput(ScriptOutputKind.Error, ex.ToString()));
                 _currentRun.SetResult(RunResult.RunAttemptFailure());
-                _ = _appStatusMessagePublisher.PublishAsync(_script.Id, "Script finished with an error");
+                _ = _appStatusMessagePublisher.PublishNoticeAsync(_script.Id, "Script finished with an error", AppStatusMessageSeverity.Error);
             }
         });
 
@@ -242,7 +247,7 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
             {
                 if (!_currentRun.IsComplete)
                 {
-                    _ = _appStatusMessagePublisher.PublishAsync(_script.Id, "Stopping...");
+                    _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Stopping...");
                 }
 
                 _currentRun.Cancel();
@@ -306,16 +311,10 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
         {
             var raw = message.Output;
 
-            string type;
-            JsonElement outputProperty;
-
+            ScriptOutput? output;
             try
             {
-                var json = JsonDocument.Parse(raw).RootElement;
-                type =
-                    json.GetProperty(nameof(ExternalProcessOutput.Type).ToLowerInvariant()).GetString() ??
-                    string.Empty;
-                outputProperty = json.GetProperty(nameof(ExternalProcessOutput.Output).ToLowerInvariant());
+                output = JsonSerializer.Deserialize<ScriptOutput>(raw);
             }
             catch
             {
@@ -326,30 +325,9 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
                 return;
             }
 
-            ScriptOutput output;
-
-            if (type == nameof(HtmlResultsScriptOutput))
+            if (output == null)
             {
-                output = JsonSerializer.Deserialize<HtmlResultsScriptOutput>(outputProperty.ToString())
-                         ?? throw new FormatException(
-                             $"Could deserialize JSON to {nameof(HtmlResultsScriptOutput)}");
-            }
-            else if (type == nameof(HtmlSqlScriptOutput))
-            {
-                output = JsonSerializer.Deserialize<HtmlSqlScriptOutput>(outputProperty.ToString())
-                         ?? throw new FormatException(
-                             $"Could deserialize JSON to {nameof(HtmlSqlScriptOutput)}");
-            }
-            else if (type == nameof(HtmlErrorScriptOutput))
-            {
-                output = JsonSerializer.Deserialize<HtmlErrorScriptOutput>(outputProperty.ToString())
-                         ?? throw new FormatException(
-                             $"Could deserialize JSON to {nameof(HtmlErrorScriptOutput)}");
-            }
-            else
-            {
-                // The raw output handler will handle writing the output
-                _rawOutputHandler.RawOutputReceived(raw);
+                _rawOutputHandler.RawErrorReceived(raw);
                 return;
             }
 
@@ -396,7 +374,7 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
             {
                 _logger.LogError("script-host process stopped unexpectedly");
                 await _combinedOutputWriter.WriteAsync(
-                    new ErrorScriptOutput("script-host process stopped unexpectedly"));
+                    new ScriptOutput(ScriptOutputKind.Error, "script-host process stopped unexpectedly"));
                 _currentRun.SetResult(RunResult.RunAttemptFailure());
             }
         }
@@ -425,7 +403,7 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
     /// Corrects line numbers in stack trace messages of uncaught exceptions outputted by external running process,
     /// relative to the line number where user code starts.
     /// </summary>
-    private static string CorrectUncaughtExceptionStackTraceLineNumber(string output, int userProgramStartLineNumber)
+    internal static string CorrectUncaughtExceptionStackTraceLineNumber(string output, int userProgramStartLineNumber)
     {
         if (!output.Contains(" :line "))
         {
@@ -452,10 +430,23 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
         return string.Join("\n", lines);
     }
 
+    private void InvalidateCompilationCache()
+    {
+        _compilationCache = null;
+        InvalidateDeploymentState();
+    }
+
+    private void InvalidateDeploymentState()
+    {
+        _lastDeployedFingerprintHash = null;
+        _lastScriptDeploy = null;
+    }
+
     public void Dispose()
     {
         _logger.LogTrace("Dispose start");
 
+        InvalidateCompilationCache();
         _externalOutputWriters.Clear();
         _externalInputReaders.Clear();
 
@@ -466,6 +457,15 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error stopping script");
+        }
+
+        try
+        {
+            _currentRun?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error disposing current run");
         }
 
         foreach (var subscription in _subscriptions)
@@ -482,4 +482,19 @@ public sealed partial class ClientServerScriptRunner : IScriptRunner
 
         _logger.LogTrace("Dispose end");
     }
+
+    /// <summary>
+    /// Cached result of a successful compilation, keyed by script fingerprint hash.
+    /// </summary>
+    private sealed record CompilationCacheEntry(
+        string FingerprintHash,
+        ParseAndCompileResult ParseAndCompileResult,
+        ScriptDependencies Dependencies);
+
+    /// <summary>
+    /// Tracks the last deployed script directory for reuse on unchanged re-runs.
+    /// </summary>
+    private sealed record ScriptDeployState(
+        DirectoryPath ScriptDir,
+        FilePath ScriptAssemblyFilePath);
 }

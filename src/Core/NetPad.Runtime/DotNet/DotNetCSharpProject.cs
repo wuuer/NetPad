@@ -15,6 +15,7 @@ public partial class DotNetCSharpProject
     private readonly IDotNetInfo _dotNetInfo;
     private readonly HashSet<Reference> _references = [];
     private readonly SemaphoreSlim _projectFileLock = new(1, 1);
+    private DotNetFrameworkVersion? _targetFrameworkVersion;
 
     /// <summary>
     /// Initializes a new instance of <see cref="DotNetCSharpProject"/>.
@@ -101,6 +102,7 @@ public partial class DotNetCSharpProject
         bool enableNullable = true,
         bool enableImplicitUsings = true)
     {
+        _targetFrameworkVersion = targetDotNetFrameworkVersion;
         ProjectDirectoryPath.CreateIfNotExists();
 
         var assemblyOutputType = outputType.ToDotNetProjectPropertyValue();
@@ -119,6 +121,40 @@ public partial class DotNetCSharpProject
                    """;
 
         await File.WriteAllTextAsync(ProjectFilePath.Path, xml);
+        await WriteGlobalJsonAsync(targetDotNetFrameworkVersion);
+    }
+
+    /// <summary>
+    /// Writes a <c>global.json</c> that pins the SDK to the target framework's major version.
+    /// This prevents a higher installed SDK (e.g. 10.0.x when targeting net9.0) from being
+    /// selected by the dotnet CLI, which would cause analyzer/assembly version mismatches.
+    /// </summary>
+    public async Task WriteGlobalJsonAsync(DotNetFrameworkVersion targetDotNetFrameworkVersion)
+    {
+        var majorVersion = targetDotNetFrameworkVersion.GetMajorVersion();
+        var globalJson = $$"""
+                           {
+                             "sdk": {
+                               "version": "{{majorVersion}}.0.100",
+                               "rollForward": "latestFeature"
+                             }
+                           }
+                           """;
+
+        await File.WriteAllTextAsync(
+            ProjectDirectoryPath.CombineFilePath("global.json").Path,
+            globalJson);
+    }
+
+    /// <summary>
+    /// Updates the project's target framework version, including the <c>.csproj</c> TargetFramework
+    /// property and the <c>global.json</c> SDK pin.
+    /// </summary>
+    public async Task UpdateTargetFrameworkAsync(DotNetFrameworkVersion newVersion)
+    {
+        _targetFrameworkVersion = newVersion;
+        await SetProjectGroupItemAsync("TargetFramework", newVersion.GetTargetFrameworkMoniker());
+        await WriteGlobalJsonAsync(newVersion);
     }
 
     /// <summary>
@@ -127,10 +163,9 @@ public partial class DotNetCSharpProject
     /// <remarks>
     /// This is a destructive operation and cannot be undone.
     /// </remarks>
-    public Task DeleteAsync()
+    public void Delete()
     {
         ProjectDirectoryPath.DeleteIfExists();
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -160,23 +195,27 @@ public partial class DotNetCSharpProject
 
         try
         {
-            var xmlDoc = XDocument.Load(ProjectFilePath.Path);
-
-            var root = xmlDoc.Root;
-            if (root == null || root.Name.LocalName != "Project")
-            {
-                throw new FormatException(
-                    "Project XML file is not formatted correctly. Could not find the root \"Project\" XML node.");
-            }
-
+            var root = GetProjectFileRoot();
             modification(root);
-
-            await File.WriteAllTextAsync(ProjectFilePath.Path, xmlDoc.ToString());
+            await File.WriteAllTextAsync(ProjectFilePath.Path, root.ToString());
         }
         finally
         {
             _projectFileLock.Release();
         }
+    }
+
+    private XElement GetProjectFileRoot()
+    {
+        var xmlDoc = XDocument.Load(ProjectFilePath.Path);
+        var root = xmlDoc.Root;
+        if (root == null || !root.Name.LocalName.Equals("Project", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new FormatException(
+                "Project XML file is not formatted correctly. Could not find the root \"Project\" XML node.");
+        }
+
+        return root;
     }
 
     /// <summary>
@@ -192,6 +231,33 @@ public partial class DotNetCSharpProject
     public async Task SetProjectAttributeAsync(string attributeName, object? value)
     {
         await ModifyProjectFileAsync(root => root.SetAttributeValue(attributeName, value));
+    }
+
+    public XElement GetPropertyGroup(XElement root)
+    {
+        var propertyGroup = root.Element("PropertyGroup");
+        if (propertyGroup == null)
+        {
+            throw new FormatException(
+                "Project XML file is not formatted correctly. Could not find a \"PropertyGroup\" XML node.");
+        }
+        return propertyGroup;
+    }
+
+    public string GetPropertyGroupItemValue(string propertyName, bool throwIfNotFound = true)
+    {
+        var root = GetProjectFileRoot();
+        var propertyGroup = GetPropertyGroup(root);
+
+        var name = XName.Get(propertyName);
+        var existing = propertyGroup.Elements(name).FirstOrDefault();
+
+        if (existing == null)
+        {
+            throw new FormatException($"Project does not have a \"{propertyName}\" property in PropertyGroup.");
+        }
+
+        return existing.Value;
     }
 
     /// <summary>
@@ -211,12 +277,7 @@ public partial class DotNetCSharpProject
     {
         await ModifyProjectFileAsync(root =>
         {
-            var firstGroup = root.Element("PropertyGroup");
-            if (firstGroup == null)
-            {
-                throw new FormatException(
-                    "Project XML file is not formatted correctly. Could not find a \"PropertyGroup\" XML node.");
-            }
+            var propertyGroup = GetPropertyGroup(root);
 
             var name = XName.Get(propertyName);
             var existing = root.Elements("PropertyGroup")
@@ -229,7 +290,7 @@ public partial class DotNetCSharpProject
             }
             else
             {
-                firstGroup.Add(new XElement(name, value ?? string.Empty));
+                propertyGroup.Add(new XElement(name, value ?? string.Empty));
             }
         });
     }
@@ -328,13 +389,35 @@ public partial class DotNetCSharpProject
         return InvokeDotNetAsync("run", args.ToArray(), true, cancellationToken);
     }
 
+    /// <summary>
+    /// Gets an existing built output assembly. This assumes it's always a .dll file with a name matching
+    /// the name of the project.
+    /// </summary>
+    /// <param name="configuration">The build configuration to get the assembly of.</param>
+    /// <returns>The built assembly if found, null otherwise.</returns>
+    public string? GetBuiltAssembly(DotNetBuildConfiguration configuration)
+    {
+        var tfm = GetPropertyGroupItemValue("TargetFramework");
+        var buildDir = BinDirectoryPath.Combine(configuration.ToString(), tfm);
+        var assemblyName = $"{ProjectFilePath.FileNameWithoutExtension}.dll";
+
+        return Directory.GetFiles(
+                buildDir.Path,
+                assemblyName,
+                SearchOption.AllDirectories)
+            .SingleOrDefault();
+    }
+
     private async Task<DotNetCliResult> InvokeDotNetAsync(
         string command,
         string[]? args = null,
         bool redirectOutput = true,
         CancellationToken cancellationToken = default)
     {
-        var psi = new ProcessStartInfo(_dotNetInfo.LocateDotNetExecutableOrThrow())
+        var dotNetExe = (_targetFrameworkVersion != null
+            ? _dotNetInfo.LocateDotNetExecutableForFramework(_targetFrameworkVersion.Value)
+            : null) ?? _dotNetInfo.LocateDotNetExecutableOrThrow();
+        var psi = new ProcessStartInfo(dotNetExe)
         {
             UseShellExecute = false,
             WorkingDirectory = ProjectDirectoryPath.Path,

@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using NetPad.Scripts;
 using NetPad.Sessions;
@@ -32,7 +32,7 @@ public class StopAllScriptsCommand(bool stopRunner) : Command
                 }
                 catch (Exception e)
                 {
-                    logger.LogError(e, "An error occured while stopping script: {Script}", environment.Script);
+                    logger.LogError(e, "An error occurred while stopping script: {Script}", environment.Script);
                 }
             }).ToArray());
 

@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NetPad.Application;
@@ -6,10 +6,6 @@ using NetPad.Configuration;
 using NetPad.DotNet;
 using NetPad.Packages;
 using NetPad.Packages.NuGet;
-using NetPad.Tests;
-using NetPad.Tests.Helpers;
-using Xunit;
-using Xunit.Abstractions;
 
 namespace NetPad.Runtime.Tests.Packages.NuGet;
 
@@ -163,7 +159,7 @@ public class NuGetPackageProviderTests : TestBase, IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetPackageInstallInfo_Returns_Correct_Info_For_Explictly_Installed_Packages()
+    public async Task GetPackageInstallInfo_Returns_Correct_Info_For_Explicitly_Installed_Packages()
     {
         var provider = CreatePackageProvider();
         await provider.InstallPackageAsync("Newtonsoft.Json", "13.0.1", DotNetFrameworkVersion.DotNet8);
@@ -177,7 +173,7 @@ public class NuGetPackageProviderTests : TestBase, IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetPackageInstallInfo_Returns_Correct_Info_For_NonExplictly_Installed_Packages()
+    public async Task GetPackageInstallInfo_Returns_Correct_Info_For_NonExplicitly_Installed_Packages()
     {
         var provider = CreatePackageProvider();
         // Will also install "Serilog v4.2.0" package as dependency
@@ -202,10 +198,10 @@ public class NuGetPackageProviderTests : TestBase, IAsyncLifetime
         var provider = CreatePackageProvider();
         await provider.InstallPackageAsync(packageId, packageVersion, DotNetFrameworkVersion.DotNet8);
 
-        var explictlyInstalledPackages = await provider.GetExplicitlyInstalledCachedPackagesAsync();
+        var explicitlyInstalledPackages = await provider.GetExplicitlyInstalledCachedPackagesAsync();
 
-        Assert.Single(explictlyInstalledPackages);
-        var package = explictlyInstalledPackages.Single();
+        Assert.Single(explicitlyInstalledPackages);
+        var package = explicitlyInstalledPackages.Single();
         Assert.Equal(packageId, package.PackageId);
         Assert.Equal(packageVersion, package.Version);
     }
@@ -294,12 +290,9 @@ public class NuGetPackageProviderTests : TestBase, IAsyncLifetime
             packageVersion,
             DotNetFrameworkVersion.DotNet8);
 
-        // Use ToHashSet at the end because different versions of the same assembly can come back
-        // in the depedency tree of some packages. For example: "Serilog.Sinks.Seq" will include
-        // two versions of the "Serilog.dll" assembly.
         var assetNames = assets.Select(x => Path.GetFileName(x.Path)).ToHashSet();
 
-        Assert.Equal(expectedAssetNames, assetNames);
+        Assert.Equal(expectedAssetNames.Order(), assetNames.Order());
     }
 
     [Fact]

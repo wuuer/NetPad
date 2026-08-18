@@ -9,7 +9,7 @@ export abstract class Pane {
 
     protected constructor(name: string, public readonly icon?: string, public readonly showNameInHeader: boolean = true) {
         this._name = name;
-        this.logger = resolve(ILogger).scopeTo((this as Record<string, unknown>).constructor.name)
+        this.logger = resolve(ILogger).scopeTo(this.constructor.name)
     }
 
     public get name(): string {
@@ -47,6 +47,18 @@ export abstract class Pane {
 
     public hide() {
         this.host?.collapse(this);
+    }
+
+    /**
+     * An optional count shown as a badge on this pane's ribbon icon. 0 shows no badge.
+     */
+    public get badgeCount(): number {
+        return 0;
+    }
+
+    /** The text shown in the ribbon badge. If {@link badgeCount} is larger than 99, shows "99+". */
+    public get badgeText(): string {
+        return this.badgeCount > 99 ? "99+" : this.badgeCount.toString();
     }
 
     public hasShortcut(shortcut?: Shortcut) {

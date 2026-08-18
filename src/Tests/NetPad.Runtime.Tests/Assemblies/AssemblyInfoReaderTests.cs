@@ -1,5 +1,4 @@
-﻿using NetPad.Assemblies;
-using Xunit;
+using NetPad.Assemblies;
 
 namespace NetPad.Runtime.Tests.Assemblies;
 

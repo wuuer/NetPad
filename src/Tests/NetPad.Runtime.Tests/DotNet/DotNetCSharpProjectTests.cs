@@ -1,8 +1,7 @@
-﻿using System.Xml.Linq;
+using System.Xml.Linq;
+using Microsoft.Extensions.Logging.Abstractions;
 using NetPad.Configuration;
 using NetPad.DotNet;
-using NetPad.Tests.Helpers;
-using Xunit;
 
 namespace NetPad.Runtime.Tests.DotNet;
 
@@ -84,7 +83,7 @@ public partial class DotNetCSharpProjectTests : IAsyncLifetime
         var proj = NewProject();
         await proj.CreateAsync(DotNetFrameworkVersion.DotNet8, ProjectOutputType.Library);
 
-        await proj.DeleteAsync();
+        proj.Delete();
 
         Assert.False(Directory.Exists(_projectDir));
     }
@@ -164,11 +163,11 @@ public partial class DotNetCSharpProjectTests : IAsyncLifetime
     public async Task RestoreAsync_InvokesDotnetAndCapturesOutput()
     {
         var proj = NewProject();
-        await proj.CreateAsync(DotNetFrameworkVersion.DotNet8, ProjectOutputType.Library);
+        await proj.CreateAsync(DotNetFrameworkVersion.DotNet9, ProjectOutputType.Library);
 
         var result = await proj.RestoreAsync();
 
-        Assert.True(result.Succeeded);
+        Assert.True(result.Succeeded, $"stdout: {result.Output}\nstderr: {result.Error}");
         Assert.Contains("restore", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(Path.GetFileName(proj.ProjectFilePath.Path), result.Output);
         Assert.True(File.Exists(proj.ProjectDirectoryPath.CombineFilePath("obj", "project.assets.json").Path));
@@ -178,11 +177,11 @@ public partial class DotNetCSharpProjectTests : IAsyncLifetime
     public async Task BuildAsync_InvokesDotnetAndCapturesOutput()
     {
         var proj = NewProject();
-        await proj.CreateAsync(DotNetFrameworkVersion.DotNet8, ProjectOutputType.Library);
+        await proj.CreateAsync(DotNetFrameworkVersion.DotNet9, ProjectOutputType.Library);
 
         var result = await proj.BuildAsync();
 
-        Assert.True(result.Succeeded);
+        Assert.True(result.Succeeded, $"stdout: {result.Output}\nstderr: {result.Error}");
         Assert.Contains("build", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(Path.GetFileName(proj.ProjectFilePath.Path), result.Output);
     }
@@ -191,14 +190,14 @@ public partial class DotNetCSharpProjectTests : IAsyncLifetime
     public async Task RunAsync_InvokesDotnetAndCapturesOutput()
     {
         var proj = NewProject(includePackageCachePath: true);
-        await proj.CreateAsync(DotNetFrameworkVersion.DotNet8, ProjectOutputType.Executable);
+        await proj.CreateAsync(DotNetFrameworkVersion.DotNet9, ProjectOutputType.Executable);
         await File.WriteAllTextAsync(
             proj.ProjectDirectoryPath.CombineFilePath("Program.cs").Path,
             "System.Console.WriteLine(\"Hello World!\");");
 
         var result = await proj.RunAsync();
 
-        Assert.True(result.Succeeded, result.Output);
+        Assert.True(result.Succeeded, $"stdout: {result.Output}\nstderr: {result.Error}");
         Assert.Contains("Hello World!", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -222,7 +221,7 @@ public partial class DotNetCSharpProjectTests : IAsyncLifetime
         string? projectFileName = null,
         bool includePackageCachePath = true)
     {
-        var info = new DotNetInfo(new Settings());
+        var info = new DotNetInfo(new Settings(), NullLogger<DotNetInfo>.Instance);
         var cacheDir = includePackageCachePath ? _packageCacheDir : null;
 
         return new DotNetCSharpProject(

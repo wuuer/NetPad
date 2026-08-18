@@ -14,21 +14,22 @@ public static class Presenter
     {
         if (!string.IsNullOrWhiteSpace(highlight))
         {
-            // Regex replace to keep original casing
+            // Regex replace to keep original casing, escaping non-highlighted parts for Spectre markup
             var pattern = Regex.Escape(highlight);
-            return Regex.Replace(
-                scriptPath,
-                pattern,
-                m => $"[green]{m.Value}[/]",
-                RegexOptions.IgnoreCase
-            );
+            var parts = Regex.Split(scriptPath, $"({pattern})", RegexOptions.IgnoreCase);
+            return string.Concat(parts.Select(part =>
+                Regex.IsMatch(part, pattern, RegexOptions.IgnoreCase)
+                    ? $"[green]{Markup.Escape(part)}[/]"
+                    : Markup.Escape(part)));
         }
 
         var fileName = Path.GetFileName(scriptPath);
         var dirName = Path.GetDirectoryName(scriptPath);
-        dirName = string.IsNullOrWhiteSpace(dirName) ? string.Empty : $"{dirName}{Path.DirectorySeparatorChar}";
+        dirName = string.IsNullOrWhiteSpace(dirName)
+            ? string.Empty
+            : $"[dim]{Markup.Escape(dirName)}{Path.DirectorySeparatorChar}[/]";
 
-        return $"{dirName}[green]{fileName}[/]";
+        return $"{dirName}[green]{Markup.Escape(fileName)}[/]";
     }
 
     public static int PrintList<T>(
@@ -64,5 +65,17 @@ public static class Presenter
     public static void Info(string message)
     {
         _errConsole.MarkupLineInterpolated($"[cyan]inf:[/] {message}");
+    }
+
+    public static async Task StatusAsync(string initialStatus, Func<Action<string>, Task> action)
+    {
+        if (Console.IsErrorRedirected)
+        {
+            await action(_ => { });
+            return;
+        }
+
+        await _errConsole.Status()
+            .StartAsync(initialStatus, async ctx => { await action(status => ctx.Status = status); });
     }
 }

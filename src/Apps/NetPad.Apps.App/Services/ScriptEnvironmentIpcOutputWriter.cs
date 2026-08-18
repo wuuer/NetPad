@@ -122,109 +122,93 @@ public sealed record ScriptEnvironmentIpcOutputWriter : IOutputWriter<object>, I
             return;
         }
 
-        // Since we want the end result to be HTML-encoded, any output that is not an HtmlScriptOutput will be
-        // converted to its corresponding HtmlScriptOutput type before pushing to IPC clients.
-
-        if (output is HtmlResultsScriptOutput htmlResultsScriptOutput)
+        if (output is not ScriptOutput so)
         {
-            if (HasReachedUserOutputMessageLimitForThisRun())
-            {
-                if (_sentOutputLimitReachedMessage) return;
+            return;
+        }
 
-                lock (_sendOutputLimitReachedMessageLock)
+        // Ensure output is HTML-formatted for the frontend
+        var isSystemNotice = false;
+
+        if (so.Format != ScriptOutputFormat.Html)
+        {
+            switch (so.Kind)
+            {
+                case ScriptOutputKind.Error:
+                    so = so with
+                    {
+                        Body = HtmlPresenter.Serialize(so.Body, new DumpOptions(Title: title, AppendNewLineToAllTextOutput: true), isError: true),
+                        Format = ScriptOutputFormat.Html
+                    };
+                    break;
+
+                case ScriptOutputKind.Sql:
+                    so = so with
+                    {
+                        Body = HtmlPresenter.Serialize(so.Body, new DumpOptions(Title: title)),
+                        Format = ScriptOutputFormat.Html
+                    };
+                    break;
+
+                default:
+                    // Not user script output: this is backend-origin text (ex. the "Script stopped at ..."
+                    // notice) or unstructured process output, which is rendered as a raw system notice.
+                    so = so with
+                    {
+                        Body = HtmlPresenter.SerializeToElement(so.Body, new DumpOptions(Title: title, AppendNewLineToAllTextOutput: true))
+                            .AddClass("raw").ToHtml(),
+                        Format = ScriptOutputFormat.Html
+                    };
+                    isSystemNotice = true;
+                    break;
+            }
+        }
+
+        // Route based on kind
+        switch (so.Kind)
+        {
+            case ScriptOutputKind.Result:
+                if (isSystemNotice)
+                {
+                    // Stopping a script cancels this run's pending output, and the "Script stopped at ..."
+                    // notice is written after that happens, so system notices must be uncancellable to
+                    // survive the stop. They are not counted against the user output limit either.
+                    QueueMessage(so, false);
+                    break;
+                }
+
+                if (HasReachedUserOutputMessageLimitForThisRun())
                 {
                     if (_sentOutputLimitReachedMessage) return;
 
-                    var message = new HtmlRawScriptOutput(HtmlPresenter.SerializeToElement(
-                            "Output limit reached.",
-                            new DumpOptions(AppendNewLineToAllTextOutput: true)
-                        )
-                        .AddClass("raw")
-                        .ToHtml()
-                    );
-                    QueueMessage(message, true);
-                    _sentOutputLimitReachedMessage = true;
+                    lock (_sendOutputLimitReachedMessageLock)
+                    {
+                        if (_sentOutputLimitReachedMessage) return;
+
+                        var message = new ScriptOutput(
+                            ScriptOutputKind.Result, 0,
+                            HtmlPresenter.SerializeToElement("Output limit reached.", new DumpOptions(AppendNewLineToAllTextOutput: true))
+                                .AddClass("raw").ToHtml(),
+                            ScriptOutputFormat.Html);
+                        QueueMessage(message, true);
+                        _sentOutputLimitReachedMessage = true;
+                    }
+
+                    return;
                 }
 
-                return;
-            }
+                Interlocked.Increment(ref _userOutputMessagesSentThisRun);
+                QueueMessage(so, true);
+                break;
 
-            Interlocked.Increment(ref _userOutputMessagesSentThisRun);
+            case ScriptOutputKind.Sql:
+                await PushToIpcAsync(new ScriptOutputEmittedEvent(_scriptEnvironment.Script.Id, so),
+                    _ctsAccessor.Value.Token);
+                break;
 
-            QueueMessage(htmlResultsScriptOutput, true);
-        }
-        else if (output is SqlScriptOutput sqlScriptOutput)
-        {
-            // Convert to HtmlSqlScriptOutput and push immediately
-            var htmlSqlScriptOutput = new HtmlSqlScriptOutput(
-                sqlScriptOutput.Order,
-                HtmlPresenter.Serialize(sqlScriptOutput.Body, new DumpOptions(Title: title))
-            );
-
-            await PushToIpcAsync(new ScriptOutputEmittedEvent(_scriptEnvironment.Script.Id, htmlSqlScriptOutput),
-                _ctsAccessor.Value.Token);
-        }
-        else if (output is HtmlSqlScriptOutput htmlSqlScriptOutput)
-        {
-            // Push immediately
-            await PushToIpcAsync(new ScriptOutputEmittedEvent(_scriptEnvironment.Script.Id, htmlSqlScriptOutput),
-                _ctsAccessor.Value.Token);
-        }
-        else if (output is RawScriptOutput rawScriptOutput)
-        {
-            // Convert to HtmlRawScriptOutput and queue
-            var htmlRawScriptOutput = new HtmlRawScriptOutput(
-                rawScriptOutput.Order,
-                HtmlPresenter.SerializeToElement(
-                        rawScriptOutput.Body,
-                        new DumpOptions(Title: title, AppendNewLineToAllTextOutput: true)
-                    )
-                    .AddClass("raw")
-                    .ToHtml()
-            );
-
-            QueueMessage(htmlRawScriptOutput, false);
-        }
-        else if (output is HtmlRawScriptOutput htmlRawScriptOutput)
-        {
-            QueueMessage(htmlRawScriptOutput, false);
-        }
-        else if (output is ErrorScriptOutput errorScriptOutput)
-        {
-            // Convert to HtmlErrorScriptOutput and queue
-            var htmlErrorOutput = new HtmlErrorScriptOutput(
-                errorScriptOutput.Order,
-                HtmlPresenter.Serialize(
-                    errorScriptOutput.Body,
-                    new DumpOptions(Title: title, AppendNewLineToAllTextOutput: true),
-                    isError: true
-                )
-            );
-
-            QueueMessage(htmlErrorOutput, false);
-        }
-        else if (output is HtmlErrorScriptOutput htmlErrorScriptOutput)
-        {
-            QueueMessage(htmlErrorScriptOutput, false);
-        }
-        else if (output is ScriptOutput scriptOutput)
-        {
-            // Convert to HtmlRawScriptOutput and queue
-            var htmlRawOutput = new HtmlRawScriptOutput(
-                scriptOutput.Order,
-                HtmlPresenter.Serialize(output, new DumpOptions(Title: title))
-            );
-
-            QueueMessage(htmlRawOutput, true);
-        }
-        else
-        {
-            _logger.LogWarning("Unexpected script output format: {OutputType}", output?.GetType().FullName);
-
-            var htmlRawOutput =
-                new HtmlRawScriptOutput(0, HtmlPresenter.Serialize(output, new DumpOptions(Title: title)));
-
-            QueueMessage(htmlRawOutput, true);
+            case ScriptOutputKind.Error:
+                QueueMessage(so, false);
+                break;
         }
     }
 

@@ -1,8 +1,7 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using NetPad.CodeAnalysis;
 using NetPad.DotNet;
-using Xunit;
 
 namespace NetPad.Runtime.Tests.CodeAnalysis;
 

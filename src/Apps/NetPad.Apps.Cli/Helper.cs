@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NetPad.Configuration;
 using NetPad.Data;
 using NetPad.DotNet;
+using NetPad.Exceptions;
 using NetPad.Scripts;
 using Spectre.Console;
 
@@ -15,7 +16,7 @@ public static class Helper
     /// If multiple matches are found, the user will be asked to select from a list.
     /// If no matches are found, null is returned.
     /// </summary>
-    public static string? SelectScript(IServiceProvider serviceProvider, string? pathOrName)
+    public static string? SelectScript(IServiceProvider serviceProvider, string? pathOrName, string action)
     {
         var settings = serviceProvider.GetRequiredService<Settings>();
         var matches = ScriptFinder.FindMatches(settings.ScriptsDirectoryPath, pathOrName);
@@ -27,12 +28,24 @@ public static class Helper
 
         var selectedScriptFilePath = matches[0];
 
+        // If exactly one match has a base name that equals the query, auto-select it
+        if (matches.Length > 1 && !string.IsNullOrWhiteSpace(pathOrName))
+        {
+            var exactNameMatches = matches
+                .Where(m => Path.GetFileNameWithoutExtension(m)
+                    .Equals(pathOrName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            if (exactNameMatches.Length == 1)
+                return exactNameMatches[0];
+        }
+
         if (matches.Length > 1)
         {
             var scriptsDirPath = settings.ScriptsDirectoryPath;
 
             var selection = new SelectionPrompt<string>()
-                .Title("Which script do you want to [green]run[/]?")
+                .Title($"Which script do you want to [green]{action}[/]?")
                 .PageSize(50)
                 .MoreChoicesText("[grey](Move up and down to reveal more)[/]")
                 .AddChoices(matches);
@@ -61,29 +74,35 @@ public static class Helper
         string scriptFilePath,
         bool verbose)
     {
-        Script? script = null;
-
         // First assume the script file is a valid .netpad file with the proper format and
         // load the script file the "normal" way
         try
         {
             var scriptRepository = serviceProvider.GetRequiredService<IScriptRepository>();
-            script = await scriptRepository.GetAsync(scriptFilePath);
+            return await scriptRepository.GetAsync(scriptFilePath);
+        }
+        catch (ScriptNotFoundException)
+        {
+            Presenter.Error($"Script file not found: {scriptFilePath}");
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Presenter.Error($"Could not read script file '{scriptFilePath}': {ex.Message}");
+            return null;
         }
         catch (Exception ex)
         {
             if (verbose)
             {
                 Presenter.Warn(
-                    $"Could not load file as a normal .netpad file; assuming contents are code. " +
+                    $"Could not load file as a .netpad file; treating contents as code. " +
                     $"Reason: {ex.Message}");
             }
         }
 
         // If the normal way failed, assume the contents of the file is C# code and create a new script
-        script ??= CreateScriptFromPlainTextFile(serviceProvider, scriptFilePath);
-
-        return script;
+        return CreateScriptFromPlainTextFile(serviceProvider, scriptFilePath);
     }
 
     /// <summary>
@@ -100,7 +119,22 @@ public static class Helper
             return null;
         }
 
-        var code = File.ReadAllText(scriptPath);
+        string code;
+        try
+        {
+            code = File.ReadAllText(scriptPath);
+        }
+        catch (FileNotFoundException)
+        {
+            Presenter.Error($"File not found: {scriptPath}");
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Presenter.Error($"Could not read file '{scriptPath}': {ex.Message}");
+            return null;
+        }
+
         var namespaces = ScriptConfigDefaults.DefaultNamespaces;
         var kind = ScriptKind.Program;
         var optimizationLevel = OptimizationLevel.Debug;
@@ -160,6 +194,34 @@ public static class Helper
         return script;
     }
 
+    /// <summary>
+    /// Parses a script kind string (case-insensitive). Returns false and emits an error
+    /// if the value is provided but not recognized. A null input returns true with a null kind.
+    /// </summary>
+    public static bool TryParseScriptKind(string? kindStr, out ScriptKind? kind)
+    {
+        kind = null;
+        if (kindStr == null)
+        {
+            return true;
+        }
+
+        if (kindStr.Equals("program", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = ScriptKind.Program;
+            return true;
+        }
+
+        if (kindStr.Equals("sql", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = ScriptKind.SQL;
+            return true;
+        }
+
+        Presenter.Error($"Unknown script kind '{kindStr}'. Supported values: program, sql.");
+        return false;
+    }
+
     public static async Task<DataConnection?> GetConnectionByNameAsync(
         IServiceProvider serviceProvider,
         string connectionName)
@@ -186,7 +248,7 @@ public static class Helper
 
 
     private static readonly string _homePath =
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('/');
+        Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
     /// <summary>
     /// If the path starts with the user's profile (home) directory, the replaces the part with a tilde (~).
@@ -198,8 +260,7 @@ public static class Helper
             return null;
         }
 
-        var index = path.IndexOf(_homePath, StringComparison.InvariantCultureIgnoreCase);
-        if (index < 0)
+        if (!path.StartsWith(_homePath, StringComparison.InvariantCultureIgnoreCase))
         {
             return path;
         }

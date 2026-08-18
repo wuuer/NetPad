@@ -1,8 +1,7 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Xml.Linq;
 using NetPad.DotNet;
 using NetPad.DotNet.References;
-using Xunit;
 
 namespace NetPad.Runtime.Tests.DotNet;
 

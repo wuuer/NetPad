@@ -41,7 +41,20 @@ public partial class Program
 
         var parentProcessId = TerminateProcessOnParentExit(args);
 
-        if (System.Linq.Enumerable.Contains(args, "-html")
+        if (System.Linq.Enumerable.Contains(args, "-json")
+            || System.Linq.Enumerable.Contains(args, "-json-msg"))
+        {
+            if (verbose)
+            {
+                WriteColor("inf: ", ConsoleColor.Cyan);
+                System.Console.Error.WriteLine("Output format: JSON");
+            }
+
+            bool dumpRaw = System.Linq.Enumerable.Contains(args, "-json");
+            bool includeSql = System.Linq.Enumerable.Contains(args, "-sql");
+            NetPad.ExecutionModel.External.Interface.ExternalProcessDumpSink.Instance.UseJsonOutput(dumpRaw, includeSql);
+        }
+        else if (System.Linq.Enumerable.Contains(args, "-html")
             || System.Linq.Enumerable.Contains(args, "-html-msg"))
         {
             if (verbose)
@@ -113,6 +126,9 @@ Usage:
 Options:
     -console        Optimized for console output (default)
     -text           Output to plain text
+    -json           Output in NDJSON (newline-delimited JSON)
+    -json-msg       Output in a message envelope with the body in JSON. For inter-process communication use.
+    -sql            Include SQL queries in JSON output (only with -json or -json-msg)
     -html           Output in raw HTML
     -html-msg       Output in a message envelope with the body in HTML. For inter-process communication use.
     -minimal        If possible, use more minimal output formatting.

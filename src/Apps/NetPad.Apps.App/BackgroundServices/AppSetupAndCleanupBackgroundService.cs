@@ -3,8 +3,11 @@ using Microsoft.Extensions.Logging;
 using NetPad.Application;
 using NetPad.Apps;
 using NetPad.Apps.Plugins;
+using NetPad.Apps.Security;
+using NetPad.Compilation;
 using NetPad.Configuration;
 using NetPad.Data;
+using NetPad.DotNet;
 using NetPad.Scripts;
 using NetPad.Sessions;
 
@@ -20,11 +23,43 @@ public class AppSetupAndCleanupBackgroundService(
     ITrivialDataStore trivialDataStore,
     IPluginManager pluginManager,
     IAppStatusMessagePublisher appStatusMessagePublisher,
+    IDotNetInfo dotNetInfo,
     ILoggerFactory loggerFactory)
     : BackgroundService(loggerFactory)
 {
     protected override async Task StartingAsync(CancellationToken stoppingToken)
     {
+        // Clean up temp directories and stale connection files left behind by previous instances
+        _ = Task.Run(() =>
+        {
+            AppDataProvider.CleanUpStaleTempDirectories();
+            ConnectionFileManager.CleanupStale();
+        }, stoppingToken);
+
+        // Pre-warm framework assembly cache on a background thread to avoid blocking startup
+        _ = Task.Run(() =>
+        {
+            var frameworkVersions = dotNetInfo.GetDotNetSdkVersions()
+                .Select(sdk => sdk.GetFrameworkVersion())
+                .Distinct();
+
+            foreach (var version in frameworkVersions)
+            {
+                try
+                {
+                    var root = dotNetInfo.LocateDotNetRootDirectoryForFramework(version);
+                    if (root != null)
+                    {
+                        FrameworkAssemblies.PreWarm(new IO.DirectoryPath(root), version);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogDebug(ex, "Failed to pre-warm framework assembly cache for {Framework}", version);
+                }
+            }
+        }, stoppingToken);
+
         // Open auto-saved scripts
         var autoSavedScripts = await autoSaveScriptRepository.GetScriptsAsync();
         await session.OpenAsync(autoSavedScripts, false);
@@ -52,7 +87,7 @@ public class AppSetupAndCleanupBackgroundService(
 
     protected override async Task StoppingAsync(CancellationToken cancellationToken)
     {
-        _ = appStatusMessagePublisher.PublishAsync("Closing...", AppStatusMessagePriority.Normal, true);
+        _ = appStatusMessagePublisher.PublishTransientAsync("Closing...");
 
         var environments = session.GetOpened();
 
@@ -66,8 +101,8 @@ public class AppSetupAndCleanupBackgroundService(
             Logger.LogError(e, "Error closing environments");
         }
 
-        Try.Run(() => AppDataProvider.ClientServerProcessesDirectoryPath.DeleteIfExists());
-        Try.Run(() => AppDataProvider.TypedDataContextTempDirectoryPath.DeleteIfExists());
+        Try.Run(AppDataProvider.ProcessTempDirectoryPath.DeleteIfExists);
+        Try.Run(ConnectionFileManager.Delete);
 
         foreach (var registration in pluginManager.PluginRegistrations)
         {

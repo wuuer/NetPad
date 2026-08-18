@@ -1,5 +1,4 @@
-﻿using NetPad.Data.Metadata;
-using Xunit;
+using NetPad.Data.Metadata;
 
 namespace NetPad.Runtime.Tests.Data;
 

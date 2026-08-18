@@ -11,6 +11,9 @@ import {
     IShortcutManager,
     IUserSecretService,
     IWindowBootstrapper,
+    INotificationService,
+    NotificationService,
+    NotificationToasts,
     PaneHost,
     PaneManager,
     Settings,
@@ -21,6 +24,9 @@ import {Window} from "./window";
 import {IStatusbarService, StatusbarService} from "./statusbar/statusbar-service";
 import {IWorkAreaAppearance, WorkAreaAppearance} from "./work-area/work-area-appearance";
 import {IWorkAreaService, WorkAreaService} from "./work-area/work-area-service";
+import {IViewerRegistry, ViewerRegistry} from "./work-area/viewers/viewer-registry";
+import {ScriptViewer} from "./work-area/viewers/script-viewer/script-viewer";
+import {ViewableScriptDocument} from "./work-area/viewers/script-viewer/viewable-script-document";
 import {ITextEditor, TextEditor} from "@application/editor/text-editor";
 import {ITextEditorService} from "@application/editor/itext-editor-service";
 import {IMainMenuService} from "@application/main-menu/imain-menu-service";
@@ -56,8 +62,10 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             Registration.singleton(IDataConnectionService, DataConnectionService),
             Registration.singleton(IBackgroundService, DialogBackgroundService),
             Registration.singleton(IWorkAreaService, WorkAreaService),
+            Registration.singleton(IViewerRegistry, ViewerRegistry),
             Registration.singleton(IMainMenuService, MainMenuService),
             Registration.singleton(IStatusbarService, StatusbarService),
+            Registration.singleton(INotificationService, NotificationService),
             Registration.singleton(IWorkAreaAppearance, WorkAreaAppearance),
             Registration.singleton(Workbench, Workbench),
             Registration.transient(ITextEditor, TextEditor),
@@ -69,9 +77,13 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             PaneHost,
             PaneToolbar,
             DataConnectionName,
+            NotificationToasts,
 
             // App startup task
             AppTask.activated(IContainer, async container => {
+                // Eagerly create the notification service so it subscribes to status messages early.
+                container.get(INotificationService);
+
                 const appService = container.get(IAppService);
                 await appService.notifyClientAppIsReady();
                 await QuickTipsDialog.showIfFirstVisit(container.get(DialogUtil));
@@ -88,6 +100,21 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
         } catch (ex) {
             this.logger.error(`Error occurred while registering plugins`, ex);
         }
+
+        try {
+            this.registerBuiltInViewers(app.container);
+        } catch (ex) {
+            this.logger.error(`Error occurred while registering built-in viewers`, ex);
+        }
+    }
+
+    private registerBuiltInViewers(container: IContainer) {
+        const registry = container.get(IViewerRegistry);
+        registry.register({
+            id: "script",
+            viewerClass: ScriptViewer,
+            canHandle: v => v instanceof ViewableScriptDocument
+        });
     }
 
     private registerPlugins(container: IContainer) {

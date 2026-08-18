@@ -38,7 +38,11 @@ namespace OmniSharp
             if (!string.IsNullOrWhiteSpace(additionalArgs))
                 args += " " + additionalArgs;
 
-            var config = new OmniSharpStdioServerConfiguration(executablePath, args.Trim(), dotNetSdkRootDirectoryPath);
+            var config = new OmniSharpStdioServerConfiguration(
+                executablePath,
+                args.Trim(),
+                dotNetSdkRootDirectoryPath,
+                projectPath);
 
             var accessor = new OmniSharpServerStdioProcessAccessor(config);
 
@@ -48,7 +52,7 @@ namespace OmniSharp
         /// <summary>
         /// Creates an OmniSharp server that interacts via standard input/output that uses an OmniSharp process that is
         /// managed externally, ie. by the application. No new OmniSharp process will be spawned by calling this function,
-        /// and no exising OmniSharp process will be stopped or restarted by calling this function.
+        /// and no existing OmniSharp process will be stopped or restarted by calling this function.
         ///
         /// The process is expected to be started, stopped, and restarted by the application. The server started by calling
         /// this function will not attempt to control the process in any way.

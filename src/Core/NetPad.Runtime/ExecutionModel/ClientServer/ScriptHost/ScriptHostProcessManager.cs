@@ -14,8 +14,8 @@ using NetPad.Scripts;
 namespace NetPad.ExecutionModel.ClientServer.ScriptHost;
 
 /// <summary>
-/// Controls the spawning and stopping of a script-host process and provides a high-level interface to send and receive
-/// messages.
+/// A manager that is used to spawn (and stop) a single instance of the script-host application.
+/// It also provides a high-level interface to send and receive messages to and from the child process.
 /// </summary>
 /// <param name="script">The target script.</param>
 /// <param name="workingDirectory">The root working directory where script-host will work within.</param>
@@ -23,6 +23,7 @@ namespace NetPad.ExecutionModel.ClientServer.ScriptHost;
 /// <param name="nonMessageOutputHandler">Handles process output that cannot be parsed into a proper message.</param>
 /// <param name="errorOutputHandler">Handles process error output.</param>
 /// <param name="eventBus"></param>
+/// <param name="dotNetInfo"></param>
 /// <param name="loggerFactory"></param>
 public class ScriptHostProcessManager(
     Script script,
@@ -31,9 +32,10 @@ public class ScriptHostProcessManager(
     Action<string> nonMessageOutputHandler,
     Action<string> errorOutputHandler,
     IEventBus eventBus,
-    ILoggerFactory loggerFactory)
+    IDotNetInfo dotNetInfo,
+    ILoggerFactory loggerFactory) : IScriptHostProcessManager
 {
-    private static readonly SemaphoreSlim _scriptHostProcessStartLock = new(1, 1);
+    private readonly SemaphoreSlim _scriptHostProcessStartLock = new(1, 1);
     private Process? _scriptHostProcess;
     private StdioIpcGateway? _ipcGateway;
 
@@ -139,6 +141,13 @@ public class ScriptHostProcessManager(
                 .WithRedirectIO()
                 .WithNoUi();
 
+            // Ensure DOTNET_ROOT points to an installation that has the runtime for the script's target framework.
+            var dotNetRootForFramework = dotNetInfo.LocateDotNetRootDirectoryForFramework(script.Config.TargetFrameworkVersion);
+            if (dotNetRootForFramework != null)
+            {
+                startInfo.EnvironmentVariables["DOTNET_ROOT"] = dotNetRootForFramework;
+            }
+
             // On Windows, we need this environment var to force console output when using the ConsoleLoggingProvider
             // See: https://github.com/dotnet/runtime/blob/8a2e7e3e979d671d97cb408fbcbdbee5594479a4/src/libraries/Microsoft.Extensions.Logging.Console/src/ConsoleLoggerProvider.cs#L69
             if (script.Config.UseAspNet && PlatformUtil.IsOSWindows())
@@ -171,7 +180,7 @@ public class ScriptHostProcessManager(
             _scriptHostProcess.Exited += (_, _) =>
             {
                 _logger.LogDebug("script-host process exited");
-                _ipcGateway.ExecuteHandlers(new ScriptHostExitedMessage());
+                _ipcGateway?.ExecuteHandlers(new ScriptHostExitedMessage());
                 Cleanup();
             };
 
@@ -238,25 +247,22 @@ public class ScriptHostProcessManager(
             // Discard items
         }
 
-        if (_ipcGateway != null)
-        {
-            _ipcGateway.Dispose();
-            _ipcGateway = null;
-        }
+        var ipcGateway = Interlocked.Exchange(ref _ipcGateway, null);
+        ipcGateway?.Dispose();
 
-        if (_scriptHostProcess != null)
+        var process = Interlocked.Exchange(ref _scriptHostProcess, null);
+        if (process != null)
         {
             try
             {
-                _scriptHostProcess.KillIfRunning();
+                process.KillIfRunning();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error killing script-host process");
             }
 
-            _scriptHostProcess.Dispose();
-            _scriptHostProcess = null;
+            process.Dispose();
 
             try
             {

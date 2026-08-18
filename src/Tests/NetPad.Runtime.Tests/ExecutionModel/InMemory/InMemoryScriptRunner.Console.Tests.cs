@@ -9,11 +9,6 @@ using NetPad.IO;
 using NetPad.Packages;
 using NetPad.Presentation;
 using NetPad.Scripts;
-using NetPad.Tests;
-using NetPad.Tests.Helpers;
-using NetPad.Tests.Services;
-using Xunit;
-using Xunit.Abstractions;
 
 namespace NetPad.Runtime.Tests.ExecutionModel.InMemory;
 
@@ -46,7 +41,7 @@ public class ScriptRuntimeConsoleTests(ITestOutputHelper testOutputHelper) : Tes
 
         string? result = null;
         var runtime = GetScriptRuntime(script);
-        runtime.AddOutput(new ActionOutputWriter<object>((output, title) => result = (output as RawScriptOutput)!.Body!.ToString()));
+        runtime.AddOutput(new ActionOutputWriter<object>((output, title) => result = (output as ScriptOutput)!.Body!));
 
         await runtime.RunScriptAsync(new RunOptions());
 
